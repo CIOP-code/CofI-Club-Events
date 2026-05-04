@@ -1,0 +1,21 @@
+name = "club-events"
+compatibility_date = "2024-09-23"
+pages_build_output_dir = "public"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "club-events-db"
+database_id = "placeholder-replace-with-actual-id"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "club-events-photos"
+
+# Store sensitive values as Wrangler secrets (never in plaintext here):
+#   wrangler pages secret put JWT_SECRET
+#   wrangler pages secret put ADMIN_PASSWORD
+#
+# Fallback values are used only in local dev (wrangler pages dev).
+# Create a .dev.vars file (git-ignored) with:
+#   JWT_SECRET=dev-secret-change-in-production
+#   ADMIN_PASSWORD=CollegeOfIdaho2024!

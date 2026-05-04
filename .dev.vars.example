@@ -1,0 +1,6 @@
+# Local development secrets for `wrangler pages dev`
+# Copy this file to .dev.vars (git-ignored) and fill in your values.
+# Never commit .dev.vars to version control.
+
+JWT_SECRET=dev-secret-change-in-production
+ADMIN_PASSWORD=CollegeOfIdaho2024!

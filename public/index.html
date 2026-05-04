@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Club Events – College of Idaho</title>
+
+  <!-- Bootstrap 5 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+  <!-- Font Awesome 6 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <!-- App styles -->
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ============================================================
+       LEFT SIDEBAR (desktop – col-2 equivalent)
+       ============================================================ -->
+  <aside id="sidebar">
+    <div class="brand">
+      <h1><i class="fa-solid fa-calendar-days"></i> Club Events</h1>
+      <p>College of Idaho</p>
+    </div>
+    <nav>
+      <button class="nav-btn active" data-page="home">
+        <span class="icon-wrap"><i class="fa-solid fa-house"></i></span>
+        Home
+      </button>
+      <button class="nav-btn" data-page="clubs">
+        <span class="icon-wrap"><i class="fa-solid fa-people-group"></i></span>
+        Clubs
+      </button>
+      <button class="nav-btn" data-page="senate">
+        <span class="icon-wrap"><i class="fa-solid fa-landmark"></i></span>
+        Senate
+      </button>
+      <button class="nav-btn" data-page="about">
+        <span class="icon-wrap"><i class="fa-solid fa-circle-info"></i></span>
+        About
+      </button>
+    </nav>
+    <div class="sidebar-footer">
+      &copy; 2024 College of Idaho
+    </div>
+  </aside>
+
+  <!-- ============================================================
+       CONTENT (col-8 equivalent) + empty col-2 right
+       ============================================================ -->
+  <div id="content-wrapper">
+    <div class="container-fluid px-3 py-2">
+      <div class="row" id="main-row">
+
+        <!-- Main content – col-8 of 10 (sidebar occupies col-2 equivalent) -->
+        <div class="col-12 col-lg-8 col-xl-8">
+
+          <!-- ======================================================
+               HOME PAGE – Calendar
+               ====================================================== -->
+          <div id="page-home" class="page active">
+            <div class="calendar-header">
+              <button class="cal-nav-btn" id="btn-prev"><i class="fa-solid fa-chevron-left"></i></button>
+              <button class="cal-nav-btn" id="btn-today">Today</button>
+              <button class="cal-nav-btn" id="btn-next"><i class="fa-solid fa-chevron-right"></i></button>
+              <h2 id="cal-title">Loading…</h2>
+              <div class="view-toggle ms-auto">
+                <button class="cal-nav-btn active" id="btn-view-week">Week</button>
+                <button class="cal-nav-btn" id="btn-view-day">Day</button>
+              </div>
+            </div>
+
+            <div class="calendar-grid-wrap" id="cal-grid-wrap">
+              <div class="calendar-grid" id="cal-grid">
+                <!-- Rendered by JS -->
+              </div>
+            </div>
+          </div><!-- /page-home -->
+
+          <!-- ======================================================
+               CLUBS PAGE
+               ====================================================== -->
+          <div id="page-clubs" class="page">
+            <div class="page-header">
+              <h2><i class="fa-solid fa-people-group me-2"></i>Clubs</h2>
+              <p>Browse all College of Idaho clubs. Click a club to log in and manage events.</p>
+            </div>
+
+            <!-- Logged-in banner (hidden by default) -->
+            <div id="club-login-banner" class="club-logged-in-banner d-none">
+              <i class="fa-solid fa-circle-check text-success"></i>
+              <span>Logged in as: <span class="club-badge" id="logged-club-name">–</span></span>
+              <button class="btn btn-sm btn-outline-danger ms-auto" id="btn-club-logout">
+                <i class="fa-solid fa-right-from-bracket"></i> Logout
+              </button>
+              <button class="btn btn-sm btn-outline-secondary" id="btn-change-pw">
+                <i class="fa-solid fa-key"></i> Change Password
+              </button>
+            </div>
+
+            <!-- Filter bar -->
+            <div class="clubs-filter">
+              <input type="text" id="club-search" placeholder="&#xf002; Search clubs…" />
+              <span class="result-count" id="clubs-count"></span>
+            </div>
+
+            <!-- Clubs grid -->
+            <div class="clubs-grid" id="clubs-grid">
+              <div class="text-center text-muted py-5 w-100">
+                <i class="fa-solid fa-spinner fa-spin fa-2x mb-2"></i>
+                <p>Loading clubs…</p>
+              </div>
+            </div>
+
+            <!-- Create event form (shown after club login) -->
+            <div id="create-event-section" class="d-none">
+              <div class="event-form-card">
+                <h5><i class="fa-solid fa-calendar-plus me-2"></i>Create New Event</h5>
+                <form id="create-event-form">
+                  <div class="mb-3">
+                    <label class="form-label" for="ev-title">Event Name *</label>
+                    <input type="text" class="form-control" id="ev-title" required />
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label" for="ev-desc">Event Description</label>
+                    <textarea class="form-control" id="ev-desc" rows="3"></textarea>
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label" for="ev-poster">Event Poster (image)</label>
+                    <input type="file" class="form-control" id="ev-poster" accept="image/*" />
+                  </div>
+                  <div class="row g-2">
+                    <div class="col-sm-6">
+                      <label class="form-label" for="ev-start">Start Date &amp; Time *</label>
+                      <input type="datetime-local" class="form-control" id="ev-start" required />
+                    </div>
+                    <div class="col-sm-6">
+                      <label class="form-label" for="ev-end">End Date &amp; Time *</label>
+                      <input type="datetime-local" class="form-control" id="ev-end" required />
+                    </div>
+                  </div>
+                  <div id="create-event-msg" class="alert-inline d-none"></div>
+                  <button type="submit" class="btn-coi-primary mt-3">
+                    <i class="fa-solid fa-plus me-1"></i>Create Event
+                  </button>
+                </form>
+              </div>
+            </div>
+
+          </div><!-- /page-clubs -->
+
+          <!-- ======================================================
+               SENATE PAGE
+               ====================================================== -->
+          <div id="page-senate" class="page">
+
+            <!-- Admin login (default view) -->
+            <div id="senate-login" class="senate-login-card">
+              <div class="icon-lock"><i class="fa-solid fa-landmark"></i></div>
+              <h3>Senate Admin</h3>
+              <p>Login with admin credentials to manage clubs and events.</p>
+              <form id="admin-login-form">
+                <input type="password" class="form-control mb-3" id="admin-pw" placeholder="Admin password" required />
+                <div id="admin-login-msg" class="alert-inline d-none mb-2"></div>
+                <button type="submit" class="btn-coi-primary w-100">
+                  <i class="fa-solid fa-right-to-bracket me-1"></i>Login
+                </button>
+              </form>
+            </div>
+
+            <!-- Admin panel (shown after login) -->
+            <div id="senate-panel" class="senate-panel d-none">
+              <div class="page-header d-flex align-items-center">
+                <div>
+                  <h2><i class="fa-solid fa-landmark me-2"></i>Senate Admin Panel</h2>
+                  <p>Manage clubs and events on behalf of the College of Idaho.</p>
+                </div>
+                <button class="btn btn-outline-danger btn-sm ms-auto" id="btn-admin-logout">
+                  <i class="fa-solid fa-right-from-bracket"></i> Logout
+                </button>
+              </div>
+
+              <div class="row g-3">
+                <!-- Create Club -->
+                <div class="col-12 col-md-6">
+                  <div class="section-card">
+                    <h4><i class="fa-solid fa-plus-circle me-2"></i>Create Club</h4>
+                    <form id="create-club-form">
+                      <div class="mb-2">
+                        <label class="form-label" for="cl-name">Club Name *</label>
+                        <input type="text" class="form-control" id="cl-name" required />
+                      </div>
+                      <div class="mb-2">
+                        <label class="form-label" for="cl-logo">Club Logo (image)</label>
+                        <input type="file" class="form-control" id="cl-logo" accept="image/*" />
+                      </div>
+                      <div class="mb-2">
+                        <label class="form-label" for="cl-pw">Default Password *</label>
+                        <input type="text" class="form-control" id="cl-pw" required
+                               placeholder="Club will change this on first login" />
+                      </div>
+                      <div id="create-club-msg" class="alert-inline d-none mb-2"></div>
+                      <button type="submit" class="btn-coi-secondary mt-1">
+                        <i class="fa-solid fa-plus me-1"></i>Create Club
+                      </button>
+                    </form>
+                  </div>
+                </div>
+
+                <!-- Create Event (admin) -->
+                <div class="col-12 col-md-6">
+                  <div class="section-card">
+                    <h4><i class="fa-solid fa-calendar-plus me-2"></i>Create Event</h4>
+                    <form id="admin-create-event-form">
+                      <div class="mb-2">
+                        <label class="form-label" for="adm-ev-club">Club *</label>
+                        <select class="form-select" id="adm-ev-club" required>
+                          <option value="">– select club –</option>
+                        </select>
+                      </div>
+                      <div class="mb-2">
+                        <label class="form-label" for="adm-ev-title">Event Name *</label>
+                        <input type="text" class="form-control" id="adm-ev-title" required />
+                      </div>
+                      <div class="mb-2">
+                        <label class="form-label" for="adm-ev-desc">Description</label>
+                        <textarea class="form-control" id="adm-ev-desc" rows="2"></textarea>
+                      </div>
+                      <div class="mb-2">
+                        <label class="form-label" for="adm-ev-poster">Poster (image)</label>
+                        <input type="file" class="form-control" id="adm-ev-poster" accept="image/*" />
+                      </div>
+                      <div class="row g-2">
+                        <div class="col-6">
+                          <label class="form-label" for="adm-ev-start">Start *</label>
+                          <input type="datetime-local" class="form-control" id="adm-ev-start" required />
+                        </div>
+                        <div class="col-6">
+                          <label class="form-label" for="adm-ev-end">End *</label>
+                          <input type="datetime-local" class="form-control" id="adm-ev-end" required />
+                        </div>
+                      </div>
+                      <div id="adm-create-event-msg" class="alert-inline d-none mb-2"></div>
+                      <button type="submit" class="btn-coi-secondary mt-2">
+                        <i class="fa-solid fa-plus me-1"></i>Create Event
+                      </button>
+                    </form>
+                  </div>
+                </div>
+
+                <!-- Clubs list (admin can delete) -->
+                <div class="col-12">
+                  <div class="section-card">
+                    <h4><i class="fa-solid fa-list me-2"></i>All Clubs</h4>
+                    <div id="admin-clubs-list">Loading…</div>
+                  </div>
+                </div>
+
+                <!-- Events list (admin can delete) -->
+                <div class="col-12">
+                  <div class="section-card">
+                    <h4><i class="fa-solid fa-calendar-week me-2"></i>Upcoming Events</h4>
+                    <div id="admin-events-list">Loading…</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div><!-- /page-senate -->
+
+          <!-- ======================================================
+               ABOUT PAGE
+               ====================================================== -->
+          <div id="page-about" class="page">
+            <div class="about-hero">
+              <h2><i class="fa-solid fa-calendar-days me-2"></i>Club Events</h2>
+              <p>What's Happening @ College of Idaho?</p>
+            </div>
+
+            <div class="about-section">
+              <h4><i class="fa-solid fa-circle-info"></i> About This App</h4>
+              <p>
+                <strong>Club Events</strong> is the official event discovery platform for the College of Idaho.
+                It allows students to browse upcoming club activities, find organizations they're interested in,
+                and stay up-to-date with everything happening on campus—all in one place.
+              </p>
+            </div>
+
+            <div class="about-section">
+              <h4><i class="fa-solid fa-map"></i> How to Use</h4>
+              <ul>
+                <li><strong>Home</strong> – View the weekly event calendar. Use the navigation arrows to browse
+                    past and future weeks. Click any event block to see full details including the event poster.</li>
+                <li><strong>Clubs</strong> – Browse all registered clubs. Search by name using the filter bar.
+                    Click any club tile to log in as that club and post new events on its behalf.
+                    After logging in you can also change your club password.</li>
+                <li><strong>Senate</strong> – Admin-only area. The College Senate can create new clubs
+                    (with a default password), post events for any club, and manage existing content.</li>
+                <li><strong>About</strong> – You're here! Learn about the app and how it was built.</li>
+              </ul>
+            </div>
+
+            <div class="about-section">
+              <h4><i class="fa-solid fa-server"></i> Technology Stack</h4>
+              <ul>
+                <li><strong>Frontend:</strong> HTML5, Bootstrap 5, Font Awesome, Vanilla JavaScript (SPA)</li>
+                <li><strong>Backend:</strong> Cloudflare Pages Functions (Workers)</li>
+                <li><strong>Database:</strong> Cloudflare D1 (SQLite at the edge)</li>
+                <li><strong>Storage:</strong> Cloudflare R2 (photos &amp; logos)</li>
+                <li><strong>Auth:</strong> PBKDF2 password hashing + HS256 JWT tokens</li>
+              </ul>
+            </div>
+
+            <div class="about-section">
+              <h4><i class="fa-solid fa-globe"></i> Deployment</h4>
+              <p>
+                Intended domain: <strong>clubevents.collegeofidaho.edu</strong><br />
+                Temporary deployment:
+                <a href="https://clubevents.collegeofidaho.rabinkalikote33.workers.dev" target="_blank" rel="noopener">
+                  clubevents.collegeofidaho.rabinkalikote33.workers.dev
+                </a>
+              </p>
+            </div>
+
+            <div class="about-section">
+              <h4><i class="fa-solid fa-code"></i> Built By</h4>
+              <div class="about-builder-card">
+                <div class="avatar">RK</div>
+                <div>
+                  <strong>Rabin Kalikote</strong><br />
+                  <a href="https://rabinkalikote.com" target="_blank" rel="noopener">rabinkalikote.com</a>
+                  <br />
+                  <span style="font-size:.82rem;color:#6b738e;">Full-stack developer &amp; student, College of Idaho</span>
+                </div>
+              </div>
+            </div>
+
+          </div><!-- /page-about -->
+
+        </div><!-- /col-8 -->
+
+        <!-- Right empty col-2 (desktop) -->
+        <div class="col-lg-2 col-xl-2 d-none d-lg-block"></div>
+
+      </div><!-- /row -->
+    </div><!-- /container-fluid -->
+  </div><!-- /content-wrapper -->
+
+</div><!-- /app -->
+
+<!-- ================================================================
+     BOTTOM NAV (mobile / tablet)
+     ================================================================ -->
+<nav id="bottom-nav" class="d-flex">
+  <button class="bnav-btn active" data-page="home"><i class="fa-solid fa-house"></i><span>Home</span></button>
+  <button class="bnav-btn" data-page="clubs"><i class="fa-solid fa-people-group"></i><span>Clubs</span></button>
+  <button class="bnav-btn" data-page="senate"><i class="fa-solid fa-landmark"></i><span>Senate</span></button>
+  <button class="bnav-btn" data-page="about"><i class="fa-solid fa-circle-info"></i><span>About</span></button>
+</nav>
+
+<!-- ================================================================
+     EVENT DETAIL MODAL
+     ================================================================ -->
+<div class="modal fade" id="eventModal" tabindex="-1" aria-labelledby="eventModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold" id="eventModalLabel">Event Details</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <img id="event-modal-poster" src="" alt="Event Poster" class="event-detail-img d-none" />
+        <h4 id="event-modal-title" class="fw-bold mb-1"></h4>
+        <div class="event-meta mb-3">
+          <span id="event-modal-club-badge" class="badge bg-primary me-2"></span>
+          <span id="event-modal-time"></span>
+        </div>
+        <p id="event-modal-desc" class="mb-0"></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CLUB LOGIN MODAL -->
+<div class="modal fade" id="clubLoginModal" tabindex="-1" aria-labelledby="clubLoginModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:380px">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold" id="clubLoginModalLabel">
+          <i class="fa-solid fa-lock me-2 text-primary"></i>Club Login
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p id="club-modal-name" class="text-muted small mb-3"></p>
+        <form id="club-login-form">
+          <div class="mb-3">
+            <label class="form-label" for="club-login-pw">Password</label>
+            <input type="password" class="form-control" id="club-login-pw" required />
+          </div>
+          <div id="club-login-msg" class="alert-inline d-none mb-2"></div>
+          <button type="submit" class="btn-coi-primary w-100">Login</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CHANGE PASSWORD MODAL -->
+<div class="modal fade" id="changePwModal" tabindex="-1" aria-labelledby="changePwModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:380px">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold" id="changePwModalLabel">
+          <i class="fa-solid fa-key me-2 text-warning"></i>Change Password
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="change-pw-form">
+          <div class="mb-3">
+            <label class="form-label">Current Password</label>
+            <input type="password" class="form-control" id="cp-current" required />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">New Password</label>
+            <input type="password" class="form-control" id="cp-new" required minlength="6" />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Confirm New Password</label>
+            <input type="password" class="form-control" id="cp-confirm" required />
+          </div>
+          <div id="change-pw-msg" class="alert-inline d-none mb-2"></div>
+          <button type="submit" class="btn-coi-primary w-100">Update Password</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Bootstrap 5 JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<!-- App JS -->
+<script src="/js/app.js"></script>
+</body>
+</html>
