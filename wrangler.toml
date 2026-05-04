@@ -1,0 +1,16 @@
+name = "club-events"
+compatibility_date = "2024-09-23"
+pages_build_output_dir = "public"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "club-events-db"
+database_id = "placeholder-replace-with-actual-id"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "club-events-photos"
+
+[vars]
+ADMIN_PASSWORD = "CollegeOfIdaho2024!"
+JWT_SECRET = "change-this-secret-in-production"
