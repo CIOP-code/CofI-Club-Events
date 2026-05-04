@@ -2,8 +2,6 @@
  * GET  /api/events?start=&end=   – list events (with optional date range filter)
  * POST /api/events                – create a new event (requires club or admin auth)
  */
-import { signToken } from '../../utils/jwt.js';
-
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,

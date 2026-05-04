@@ -41,7 +41,10 @@ export async function onRequestPost({ env, request, data }) {
     return json({ error: 'Only JPEG, PNG, GIF, and WebP images are allowed' }, 400);
   }
 
-  const prefix = user.type === 'admin' ? 'logo' : 'poster';
+  // Determine key prefix from the intended_use field provided by the caller.
+  // All API clients must pass this field explicitly; 'file' is a safe neutral fallback.
+  const intendedUse = formData.get('intended_use') || 'file';
+  const prefix = ['logo', 'poster'].includes(intendedUse) ? intendedUse : 'file';
   const ext = file.type.split('/')[1].replace('jpeg', 'jpg');
   const key = `${randomKey(prefix)}.${ext}`;
 

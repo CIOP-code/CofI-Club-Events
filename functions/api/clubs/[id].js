@@ -3,8 +3,6 @@
  * PUT    /api/clubs/:id  – update a club (requires owner club or admin)
  * DELETE /api/clubs/:id  – delete a club (requires admin)
  */
-import { generateSalt, hashPassword } from '../../../utils/crypto.js';
-
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,

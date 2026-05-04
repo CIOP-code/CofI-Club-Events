@@ -110,10 +110,11 @@ async function apiFetch(path, opts = {}) {
   return { ok: res.ok, status: res.status, data };
 }
 
-async function uploadFile(file) {
+async function uploadFile(file, intendedUse = 'poster') {
   const token = state.loggedInClub?.token || state.adminToken;
   const form = new FormData();
   form.append('file', file);
+  form.append('intended_use', intendedUse);
   const headers = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch('/api/upload', { method: 'POST', headers, body: form });
@@ -221,7 +222,7 @@ async function renderCalendar() {
       const end   = new Date(ev.end_datetime);
       const startMin = start.getHours() * 60 + start.getMinutes();
       const endMin   = end.getHours() * 60 + end.getMinutes();
-      const duration = Math.max(endMin - startMin, 30); // at least 30px tall
+      const duration = Math.max(endMin - startMin, 15); // min 15-min visual height for readability
 
       const topPx    = startMin * (HOUR_H / 60);
       const heightPx = duration * (HOUR_H / 60);
@@ -476,7 +477,7 @@ document.getElementById('create-event-form').addEventListener('submit', async fu
   let poster_key = null;
   const posterFile = document.getElementById('ev-poster').files[0];
   if (posterFile) {
-    const { ok, data } = await uploadFile(posterFile);
+    const { ok, data } = await uploadFile(posterFile, 'poster');
     if (!ok) {
       showAlert('create-event-msg', data.error || 'Failed to upload poster');
       btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-plus me-1"></i>Create Event';
@@ -562,18 +563,26 @@ async function loadAdminData() {
   sel.innerHTML = `<option value="">– select club –</option>` +
     clubs.map(c => `<option value="${c.id}">${escHtml(c.name)}</option>`).join('');
 
-  // Clubs list
+  // Clubs list – use event delegation instead of inline onclick
   const clList = document.getElementById('admin-clubs-list');
-  clList.innerHTML = clubs.length ? clubs.map(c => `
-    <div class="event-list-item">
-      <div class="ev-info">
-        <div class="ev-title-txt">${escHtml(c.name)}</div>
-        <div class="ev-meta-txt">ID: ${c.id} · Created: ${new Date(c.created_at).toLocaleDateString()}</div>
-      </div>
-      <button class="btn btn-sm btn-outline-danger" onclick="deleteClub(${c.id})">
-        <i class="fa-solid fa-trash"></i>
-      </button>
-    </div>`).join('') : '<p class="text-muted small">No clubs yet.</p>';
+  if (clubs.length) {
+    clList.innerHTML = clubs.map(c => `
+      <div class="event-list-item">
+        <div class="ev-info">
+          <div class="ev-title-txt">${escHtml(c.name)}</div>
+          <div class="ev-meta-txt">ID: ${c.id} · Created: ${new Date(c.created_at).toLocaleDateString()}</div>
+        </div>
+        <button class="btn btn-sm btn-outline-danger" data-delete-club="${c.id}">
+          <i class="fa-solid fa-trash"></i>
+        </button>
+      </div>`).join('');
+
+    clList.querySelectorAll('[data-delete-club]').forEach(btn => {
+      btn.addEventListener('click', () => adminDeleteClub(parseInt(btn.dataset.deleteClub)));
+    });
+  } else {
+    clList.innerHTML = '<p class="text-muted small">No clubs yet.</p>';
+  }
 
   // Events list
   loadAdminEvents();
@@ -585,16 +594,24 @@ async function loadAdminEvents() {
   const { ok, data } = await apiFetch(`/api/events?start=${isoLocal(now)}`);
   const events = ok ? (data.events || []) : [];
 
-  evList.innerHTML = events.length ? events.map(ev => `
-    <div class="event-list-item">
-      <div class="ev-info">
-        <div class="ev-title-txt">${escHtml(ev.title)}</div>
-        <div class="ev-meta-txt">${escHtml(ev.club_name)} · ${new Date(ev.start_datetime).toLocaleString()}</div>
-      </div>
-      <button class="btn btn-sm btn-outline-danger" onclick="deleteEvent(${ev.id})">
-        <i class="fa-solid fa-trash"></i>
-      </button>
-    </div>`).join('') : '<p class="text-muted small">No upcoming events.</p>';
+  if (events.length) {
+    evList.innerHTML = events.map(ev => `
+      <div class="event-list-item">
+        <div class="ev-info">
+          <div class="ev-title-txt">${escHtml(ev.title)}</div>
+          <div class="ev-meta-txt">${escHtml(ev.club_name)} · ${new Date(ev.start_datetime).toLocaleString()}</div>
+        </div>
+        <button class="btn btn-sm btn-outline-danger" data-delete-event="${ev.id}">
+          <i class="fa-solid fa-trash"></i>
+        </button>
+      </div>`).join('');
+
+    evList.querySelectorAll('[data-delete-event]').forEach(btn => {
+      btn.addEventListener('click', () => adminDeleteEvent(parseInt(btn.dataset.deleteEvent)));
+    });
+  } else {
+    evList.innerHTML = '<p class="text-muted small">No upcoming events.</p>';
+  }
 }
 
 // Create club (admin)
@@ -607,7 +624,7 @@ document.getElementById('create-club-form').addEventListener('submit', async fun
   let logo_key = null;
   const logoFile = document.getElementById('cl-logo').files[0];
   if (logoFile) {
-    const { ok, data } = await uploadFile(logoFile);
+    const { ok, data } = await uploadFile(logoFile, 'logo');
     if (!ok) {
       showAlert('create-club-msg', data.error || 'Logo upload failed');
       btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-plus me-1"></i>Create Club';
@@ -643,7 +660,7 @@ document.getElementById('admin-create-event-form').addEventListener('submit', as
   let poster_key = null;
   const posterFile = document.getElementById('adm-ev-poster').files[0];
   if (posterFile) {
-    const { ok, data } = await uploadFile(posterFile);
+    const { ok, data } = await uploadFile(posterFile, 'poster');
     if (!ok) {
       showAlert('adm-create-event-msg', data.error || 'Poster upload failed');
       btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-plus me-1"></i>Create Event';
@@ -672,21 +689,21 @@ document.getElementById('admin-create-event-form').addEventListener('submit', as
   loadAdminEvents();
 });
 
-// Delete club (global, called from inline onclick)
-window.deleteClub = async function (id) {
+// Delete club (no longer needs to be on window – called via event delegation)
+async function adminDeleteClub(id) {
   if (!confirm('Delete this club and all its events?')) return;
   const { ok, data } = await apiFetch(`/api/clubs/${id}`, { method: 'DELETE' });
   if (!ok) { alert(data.error || 'Failed to delete club'); return; }
   loadAdminData();
-};
+}
 
-// Delete event (global)
-window.deleteEvent = async function (id) {
+// Delete event
+async function adminDeleteEvent(id) {
   if (!confirm('Delete this event?')) return;
   const { ok, data } = await apiFetch(`/api/events/${id}`, { method: 'DELETE' });
   if (!ok) { alert(data.error || 'Failed to delete event'); return; }
   loadAdminEvents();
-};
+}
 
 /* =============================================================
    INIT
