@@ -237,6 +237,7 @@ async function renderCalendar() {
           data-ev-id="${ev.id}"
           title="${escHtml(ev.title)} · ${escHtml(timeStr)}">
         <div class="ev-title">${escHtml(ev.title)}</div>
+        <div class="ev-location">${escHtml(ev.location_name || '')}</div>
         <div class="ev-club">${escHtml(ev.club_name || '')}</div>
       </div>`;
     });
