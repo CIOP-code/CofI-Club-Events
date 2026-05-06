@@ -14,6 +14,8 @@
   --nav-active:  var(--coi-gold);
   --event-radius:6px;
   --hour-h:      60px;     /* pixels per hour on the time grid */
+  --calendar-header-h: 56px; /* fixed visual height used for sticky offsets */
+  --day-header-h: 44px; /* per-day header visual height */
 
   /* surface / semantic tokens */
   --color-surface: #ffffff; /* page / card surface */
@@ -164,9 +166,9 @@ body {
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 48px);
+  height: 95vh;
   background: var(--color-surface);
-  overflow-y: auto; /* allow internal scrolling */
+  overflow: scroll;
   -webkit-overflow-scrolling: touch;
   border-radius: 10px;
   border: 1px solid var(--color-border);
@@ -177,14 +179,6 @@ body {
 /* Make inner pages and cards fit the card width */
 #content-wrapper .page {
   width: 100%;
-}
-
-/* Inner Bootstrap container inside the card should not prevent scrolling */
-#content-wrapper > .container-fluid {
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  min-height: 0; /* allow children to shrink for overflow */
 }
 
 /* Make calendar grid fill remaining vertical space so header stays visible */
@@ -198,12 +192,18 @@ body {
    HOME – CALENDAR
    =================================================== */
 .calendar-header {
+  /* sticky page-level calendar header that sits at the top of #content-wrapper */
+  position: sticky;
+  top: 0;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 14px 16px 10px;
+  height: var(--calendar-header-h);
+  padding: 0 16px; /* vertical centering handled by fixed height */
   flex-wrap: wrap;
+  background: var(--color-surface);
   border-bottom: 1px solid var(--color-border-2);
+  z-index: 220; /* above day headers and grid content */
 }
 .calendar-header h2 {
   font-size: 1rem;
@@ -234,10 +234,7 @@ body {
 /* Time grid */
 .calendar-grid-wrap {
   overflow-y: auto;
-  max-height: calc(100vh - 180px);
   border-radius: 10px;
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
   position: relative; /* make this the reference for sticky day headers */
   -webkit-overflow-scrolling: touch; /* smoother scrolling on iOS */
 }
@@ -282,16 +279,16 @@ body {
 .day-col:last-child { border-right: none; }
 
 .day-header {
+  /* per-day header that becomes sticky beneath the main calendar header */
   position: sticky;
-  top: 0;
+  top: var(--calendar-header-h);
   background: var(--color-surface);
-  z-index: 100; /* above events and grid lines */
-  height: 56px; /* consistent header height */
+  z-index: 200; /* sit above events but beneath the calendar header */
+  height: var(--day-header-h); /* consistent header height */
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 0 6px; /* minimal horizontal padding; vertical centered by flex */
+  padding: 0 6px; /* minimal horizontal padding */
   text-align: center;
   border-bottom: 1px solid var(--color-border-2);
 }

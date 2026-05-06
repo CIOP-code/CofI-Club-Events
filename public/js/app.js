@@ -17,6 +17,17 @@ const state = {
   pendingLoginClub: null,  // club object waiting for password
 };
 
+/* Ensure CSS variable for calendar header height matches the rendered size.
+   This keeps the .day-header top offset in sync if the header wraps or changes height. */
+function syncCalendarHeaderHeight() {
+  const el = document.querySelector('.calendar-header');
+  if (!el) return;
+  const h = Math.round(el.getBoundingClientRect().height);
+  document.documentElement.style.setProperty('--calendar-header-h', h + 'px');
+}
+window.addEventListener('load', () => setTimeout(syncCalendarHeaderHeight, 50));
+window.addEventListener('resize', debounce(() => setTimeout(syncCalendarHeaderHeight, 60), 100));
+
 /* =============================================================
    NAVIGATION
    ============================================================= */
@@ -253,8 +264,9 @@ async function renderCalendar() {
     el.addEventListener('click', () => openEventModal(el.dataset.evId, events));
   });
 
-  // Scroll to 7am on load
-  const scrollTo = 7 * HOUR_H + 52; // 52 = day-header height
+  // Scroll to 7am on load — respect the CSS day-header height variable so offsets match
+  const dayHeaderH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--day-header-h')) || 52;
+  const scrollTo = 7 * HOUR_H + dayHeaderH; // align so 7am sits below headers
   wrap.scrollTop = scrollTo;
 }
 
