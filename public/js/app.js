@@ -202,7 +202,7 @@ async function renderCalendar() {
   // Blank top cell (aligns with day headers)
   html += `<div style="height:52px"></div>`;
   HOURS.forEach(h => {
-    const label = h === 0 ? '12am' : h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h-12}pm`;
+    const label = h === 0 ? '1am' : h < 11 ? `${h+1}am` : h === 11 ? '12pm' : `${h-12+1}pm`;
     html += `<div class="time-label">${label}</div>`;
   });
   html += `</div>`;
