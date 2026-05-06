@@ -6,8 +6,8 @@
  * If no admin row exists in D1, the first call with the correct ADMIN_PASSWORD
  * env var will bootstrap the admin account.
  */
-import { verifyPassword, hashPassword, generateSalt } from '../../../utils/crypto.js';
-import { signToken } from '../../../utils/jwt.js';
+import { verifyPassword, hashPassword, generateSalt } from '../../utils/crypto.js';
+import { signToken } from '../../utils/jwt.js';
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {

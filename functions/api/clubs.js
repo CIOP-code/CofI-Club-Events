@@ -2,7 +2,7 @@
  * GET  /api/clubs        – list all clubs
  * POST /api/clubs        – create a new club (requires admin auth)
  */
-import { generateSalt, hashPassword } from '../../utils/crypto.js';
+import { generateSalt, hashPassword } from '../utils/crypto.js';
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -14,7 +14,7 @@ function json(data, status = 200) {
 export async function onRequestGet({ env }) {
   try {
     const result = await env.DB.prepare(
-      `SELECT id, name, logo_key, created_at FROM clubs ORDER BY name ASC`
+      `SELECT id, name, created_at FROM clubs ORDER BY name ASC`
     ).all();
     return json({ clubs: result.results });
   } catch (err) {
@@ -31,7 +31,7 @@ export async function onRequestPost({ env, request, data }) {
   let body;
   try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
 
-  const { name, logo_key, password } = body;
+  const { name, password } = body;
   if (!name || !password) {
     return json({ error: 'name and password are required' }, 400);
   }
@@ -41,8 +41,8 @@ export async function onRequestPost({ env, request, data }) {
 
   try {
     const result = await env.DB.prepare(
-      `INSERT INTO clubs (name, logo_key, password_hash, salt) VALUES (?, ?, ?, ?)`
-    ).bind(name, logo_key || null, password_hash, salt).run();
+      `INSERT INTO clubs (name, password_hash, salt) VALUES (?, ?, ?)`
+    ).bind(name, password_hash, salt).run();
     return json({ id: result.meta.last_row_id, message: 'Club created' }, 201);
   } catch (err) {
     if (err.message.includes('UNIQUE')) {

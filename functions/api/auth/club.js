@@ -1,10 +1,10 @@
 /**
  * POST /api/auth/club  – login as a club user
  * Body: { club_id, password }
- * Returns: { token, club: { id, name, logo_key } }
+ * Returns: { token, club: { id, name } }
  */
-import { verifyPassword } from '../../../utils/crypto.js';
-import { signToken } from '../../../utils/jwt.js';
+import { verifyPassword } from '../../utils/crypto.js';
+import { signToken } from '../../utils/jwt.js';
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -24,7 +24,7 @@ export async function onRequestPost({ env, request }) {
 
   try {
     const club = await env.DB.prepare(
-      `SELECT id, name, logo_key, password_hash, salt FROM clubs WHERE id = ?`
+      `SELECT id, name, password_hash, salt FROM clubs WHERE id = ?`
     ).bind(club_id).first();
 
     if (!club) return json({ error: 'Club not found' }, 404);
@@ -35,10 +35,7 @@ export async function onRequestPost({ env, request }) {
     const secret = env.JWT_SECRET || 'change-this-secret-in-production';
     const token = await signToken({ type: 'club', club_id: club.id, club_name: club.name }, secret);
 
-    return json({
-      token,
-      club: { id: club.id, name: club.name, logo_key: club.logo_key },
-    });
+    return json({ token, club: { id: club.id, name: club.name } });
   } catch (err) {
     return json({ error: err.message }, 500);
   }

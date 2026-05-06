@@ -17,7 +17,7 @@ A full-stack web application for discovering and managing club events at the Col
 | Frontend | HTML5, Bootstrap 5, Font Awesome 6, Vanilla JS (SPA) |
 | Backend | Cloudflare Pages Functions (Workers) |
 | Database | Cloudflare D1 (SQLite at the edge) |
-| File Storage | Cloudflare R2 (event posters & club logos) |
+| File Storage | Not used — club logos replaced with icons; events use campus locations stored in D1 |
 | Auth | PBKDF2 password hashing + HS256 JWT tokens |
 
 ## Features
@@ -25,19 +25,19 @@ A full-stack web application for discovering and managing club events at the Col
 ### Home – Event Calendar
 - **Week view** (desktop): 7-day time grid, each day as a 24-hour vertical column
 - **Day view** (mobile/tablet): single-day time grid
-- Event blocks show title and organizing club; click to open a detail modal with poster
+ - Event blocks show title and organizing club; click to open a detail modal with event details and location
 - Navigate by day or week; jump back to "Today" at any time
 
 ### Clubs
 - Grid of all registered clubs with logos and names
 - Live filter/search bar
 - Click any club tile to log in with the club password
-- After login: create new events (title, description, poster, start/end datetime)
+ - After login: create new events (title, description, location, start/end datetime)
 - Change club password while logged in
 
 ### Senate (Admin)
 - Admin login (default password set via `ADMIN_PASSWORD` environment variable)
-- Create new clubs (name, logo, default password)
+ - Create new clubs (name, default password) — club logos are represented by icons
 - Create events on behalf of any club
 - Delete clubs and events
 
@@ -65,8 +65,7 @@ Club-Events/
 │   │   │   ├── club.js            # POST /api/auth/club
 │   │   │   ├── admin.js           # POST /api/auth/admin
 │   │   │   └── change-password.js # POST /api/auth/change-password
-│   │   ├── upload.js         # POST /api/upload (R2)
-│   │   └── files/[key].js    # GET /api/files/:key (R2 serve)
+│   │   ├── locations.js     # GET/POST /api/locations
 │   └── utils/
 │       ├── jwt.js            # JWT sign/verify (Web Crypto API)
 │       └── crypto.js         # PBKDF2 password hashing
@@ -88,10 +87,9 @@ wrangler d1 create club-events-db
 wrangler d1 execute club-events-db --file=schema.sql
 ```
 
-### 2. Create R2 bucket
-```bash
-wrangler r2 bucket create club-events-photos
-```
+### 2. (Optional) Seed locations
+
+You can pre-populate the `locations` table via the D1 console or by using the `/api/locations` endpoint.
 
 ### 3. Set secrets
 ```bash

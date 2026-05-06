@@ -15,9 +15,10 @@ export async function onRequestGet({ env, request }) {
   const end   = url.searchParams.get('end');
 
   let query = `
-    SELECT e.*, c.name AS club_name, c.logo_key
+    SELECT e.*, c.name AS club_name, l.name AS location_name
     FROM events e
     JOIN clubs c ON e.club_id = c.id
+    LEFT JOIN locations l ON e.location_id = l.id
   `;
   const params = [];
 
@@ -52,7 +53,7 @@ export async function onRequestPost({ env, request, data }) {
     return json({ error: 'Invalid JSON body' }, 400);
   }
 
-  const { title, description, poster_key, start_datetime, end_datetime } = body;
+  const { title, description, location_id, start_datetime, end_datetime } = body;
   if (!title || !start_datetime || !end_datetime) {
     return json({ error: 'title, start_datetime, and end_datetime are required' }, 400);
   }
@@ -65,9 +66,9 @@ export async function onRequestPost({ env, request, data }) {
 
   try {
     const result = await env.DB.prepare(
-      `INSERT INTO events (title, description, poster_key, start_datetime, end_datetime, club_id)
+      `INSERT INTO events (title, description, location_id, start_datetime, end_datetime, club_id)
        VALUES (?, ?, ?, ?, ?, ?)`
-    ).bind(title, description || '', poster_key || null, start_datetime, end_datetime, club_id).run();
+    ).bind(title, description || '', location_id || null, start_datetime, end_datetime, club_id).run();
 
     return json({ id: result.meta.last_row_id, message: 'Event created' }, 201);
   } catch (err) {

@@ -128,8 +128,10 @@
                     <textarea class="form-control" id="ev-desc" rows="3"></textarea>
                   </div>
                   <div class="mb-3">
-                    <label class="form-label" for="ev-poster">Event Poster (image)</label>
-                    <input type="file" class="form-control" id="ev-poster" accept="image/*" />
+                    <label class="form-label" for="ev-location">Location *</label>
+                    <select class="form-select" id="ev-location"></select>
+                    <div class="form-text">Or create a new location below if it doesn't exist.</div>
+                    <input type="text" class="form-control mt-2" id="ev-new-location" placeholder="New location name (optional)" />
                   </div>
                   <div class="row g-2">
                     <div class="col-sm-6">
@@ -192,10 +194,7 @@
                         <label class="form-label" for="cl-name">Club Name *</label>
                         <input type="text" class="form-control" id="cl-name" required />
                       </div>
-                      <div class="mb-2">
-                        <label class="form-label" for="cl-logo">Club Logo (image)</label>
-                        <input type="file" class="form-control" id="cl-logo" accept="image/*" />
-                      </div>
+                      <!-- Club logo removed: use Font Awesome icon instead -->
                       <div class="mb-2">
                         <label class="form-label" for="cl-pw">Default Password *</label>
                         <input type="text" class="form-control" id="cl-pw" required
@@ -229,8 +228,10 @@
                         <textarea class="form-control" id="adm-ev-desc" rows="2"></textarea>
                       </div>
                       <div class="mb-2">
-                        <label class="form-label" for="adm-ev-poster">Poster (image)</label>
-                        <input type="file" class="form-control" id="adm-ev-poster" accept="image/*" />
+                        <label class="form-label" for="adm-ev-location">Location</label>
+                        <select class="form-select" id="adm-ev-location"></select>
+                        <div class="form-text">Or add a new location below.</div>
+                        <input type="text" class="form-control mt-2" id="adm-ev-new-location" placeholder="New location name (optional)" />
                       </div>
                       <div class="row g-2">
                         <div class="col-6">
@@ -291,8 +292,8 @@
             <div class="about-section">
               <h4><i class="fa-solid fa-map"></i> How to Use</h4>
               <ul>
-                <li><strong>Home</strong> – View the weekly event calendar. Use the navigation arrows to browse
-                    past and future weeks. Click any event block to see full details including the event poster.</li>
+        <li><strong>Home</strong> – View the weekly event calendar. Use the navigation arrows to browse
+          past and future weeks. Click any event block to see full details including the event location.</li>
                 <li><strong>Clubs</strong> – Browse all registered clubs. Search by name using the filter bar.
                     Click any club tile to log in as that club and post new events on its behalf.
                     After logging in you can also change your club password.</li>
@@ -308,7 +309,7 @@
                 <li><strong>Frontend:</strong> HTML5, Bootstrap 5, Font Awesome, Vanilla JavaScript (SPA)</li>
                 <li><strong>Backend:</strong> Cloudflare Pages Functions (Workers)</li>
                 <li><strong>Database:</strong> Cloudflare D1 (SQLite at the edge)</li>
-                <li><strong>Storage:</strong> Cloudflare R2 (photos &amp; logos)</li>
+                <li><strong>Storage:</strong> Not used — logos are icons and events use campus locations</li>
                 <li><strong>Auth:</strong> PBKDF2 password hashing + HS256 JWT tokens</li>
               </ul>
             </div>

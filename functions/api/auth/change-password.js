@@ -3,7 +3,7 @@
  * Body: { current_password, new_password }
  * Requires club auth token.
  */
-import { verifyPassword, hashPassword, generateSalt } from '../../../utils/crypto.js';
+import { verifyPassword, hashPassword, generateSalt } from '../../utils/crypto.js';
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {

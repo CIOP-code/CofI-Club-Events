@@ -2,5 +2,5 @@
 # Copy this file to .dev.vars (git-ignored) and fill in your values.
 # Never commit .dev.vars to version control.
 
-JWT_SECRET=dev-secret-change-in-production
+JWT_SECRET=this-secret-is-a-secret
 ADMIN_PASSWORD=CollegeOfIdaho2024!

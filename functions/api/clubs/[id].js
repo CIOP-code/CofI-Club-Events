@@ -14,7 +14,7 @@ export async function onRequestGet({ env, params }) {
   const { id } = params;
   try {
     const club = await env.DB.prepare(
-      `SELECT id, name, logo_key, created_at FROM clubs WHERE id = ?`
+      `SELECT id, name, created_at FROM clubs WHERE id = ?`
     ).bind(id).first();
     if (!club) return json({ error: 'Club not found' }, 404);
     return json({ club });
@@ -35,11 +35,11 @@ export async function onRequestPut({ env, request, params, data }) {
   let body;
   try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
 
-  const { name, logo_key } = body;
+  const { name } = body;
   try {
     await env.DB.prepare(
-      `UPDATE clubs SET name=COALESCE(?,name), logo_key=COALESCE(?,logo_key) WHERE id=?`
-    ).bind(name || null, logo_key || null, id).run();
+      `UPDATE clubs SET name=COALESCE(?,name) WHERE id=?`
+    ).bind(name || null, id).run();
     return json({ message: 'Club updated' });
   } catch (err) {
     return json({ error: err.message }, 500);

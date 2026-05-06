@@ -14,8 +14,10 @@ export async function onRequestGet({ env, params }) {
   const { id } = params;
   try {
     const event = await env.DB.prepare(
-      `SELECT e.*, c.name AS club_name, c.logo_key
-       FROM events e JOIN clubs c ON e.club_id = c.id
+      `SELECT e.*, c.name AS club_name, l.name AS location_name
+       FROM events e
+       JOIN clubs c ON e.club_id = c.id
+       LEFT JOIN locations l ON e.location_id = l.id
        WHERE e.id = ?`
     ).bind(id).first();
     if (!event) return json({ error: 'Event not found' }, 404);
@@ -40,14 +42,14 @@ export async function onRequestPut({ env, request, params, data }) {
   let body;
   try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
 
-  const { title, description, poster_key, start_datetime, end_datetime } = body;
+  const { title, description, location_id, start_datetime, end_datetime } = body;
   try {
     await env.DB.prepare(
-      `UPDATE events SET title=?, description=?, poster_key=?, start_datetime=?, end_datetime=? WHERE id=?`
+      `UPDATE events SET title=?, description=?, location_id=?, start_datetime=?, end_datetime=? WHERE id = ?`
     ).bind(
       title ?? event.title,
       description ?? event.description,
-      poster_key ?? event.poster_key,
+      location_id ?? event.location_id,
       start_datetime ?? event.start_datetime,
       end_datetime ?? event.end_datetime,
       id

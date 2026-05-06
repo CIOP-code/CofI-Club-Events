@@ -12,7 +12,7 @@ const state = {
   calAnchorDate: new Date(),  // reference date for calendar view
   events: [],
   clubs: [],
-  loggedInClub: null,   // { id, name, logo_key, token }
+  loggedInClub: null,   // { id, name, token }
   adminToken: null,
   pendingLoginClub: null,  // club object waiting for password
 };
@@ -109,17 +109,20 @@ async function apiFetch(path, opts = {}) {
   const data = await res.json().catch(() => ({}));
   return { ok: res.ok, status: res.status, data };
 }
+// Locations helpers
+async function fetchLocations() {
+  const { ok, data } = await apiFetch('/api/locations');
+  return ok ? (data.locations || []) : [];
+}
 
-async function uploadFile(file, intendedUse = 'poster') {
+async function ensureLocation(newName) {
   const token = state.loggedInClub?.token || state.adminToken;
-  const form = new FormData();
-  form.append('file', file);
-  form.append('intended_use', intendedUse);
-  const headers = {};
+  const headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
-  const res = await fetch('/api/upload', { method: 'POST', headers, body: form });
+  const res = await fetch('/api/locations', { method: 'POST', headers, body: JSON.stringify({ name: newName }) });
   const data = await res.json().catch(() => ({}));
-  return { ok: res.ok, data };
+  if (!res.ok) throw new Error(data.error || 'Failed to create location');
+  return data.id;
 }
 
 /* =============================================================
@@ -275,10 +278,12 @@ function openEventModal(evId, events) {
     `${fmt(start,{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})} – ${fmt(end,{hour:'numeric',minute:'2-digit'})}`;
   document.getElementById('event-modal-desc').textContent = ev.description || 'No description provided.';
 
+  // Display location instead of poster image
   const img = document.getElementById('event-modal-poster');
-  if (ev.poster_key) {
-    img.src = `/api/files/${ev.poster_key}`;
-    img.classList.remove('d-none');
+  if (ev.location_name) {
+    img.classList.add('d-none');
+    // append location to time display
+    document.getElementById('event-modal-time').textContent += ` · ${escHtml(ev.location_name)}`;
   } else {
     img.classList.add('d-none');
   }
@@ -353,9 +358,8 @@ function renderClubsGrid(clubs) {
   count.textContent = `${clubs.length} club${clubs.length !== 1 ? 's' : ''}`;
 
   grid.innerHTML = clubs.map(club => {
-    const logoHtml = club.logo_key
-      ? `<img src="/api/files/${club.logo_key}" alt="${escHtml(club.name)}" loading="lazy" />`
-      : `<div class="club-logo-placeholder">${escHtml(club.name.charAt(0).toUpperCase())}</div>`;
+    // Use a Font Awesome icon + club initial instead of storing a logo
+    const logoHtml = `<div class="club-logo-placeholder"><i class="fa-solid fa-user-group"></i><span>${escHtml(club.name.charAt(0).toUpperCase())}</span></div>`;
     return `<div class="club-tile" data-club-id="${club.id}" data-club-name="${escHtml(club.name)}"
                  tabindex="0" role="button" aria-label="Login as ${escHtml(club.name)}">
       ${logoHtml}
@@ -424,6 +428,19 @@ function onClubLogin() {
   document.getElementById('logged-club-name').textContent = state.loggedInClub.name;
   banner.classList.remove('d-none');
   document.getElementById('create-event-section').classList.remove('d-none');
+  // Populate locations for club create-event form
+  (async () => {
+    try {
+      const locations = await fetchLocations();
+      const sel = document.getElementById('ev-location');
+      if (sel) {
+        sel.innerHTML = `<option value="">– select location –</option>` +
+          locations.map(l => `<option value="${l.id}">${escHtml(l.name)}</option>`).join('');
+      }
+    } catch (e) {
+      // ignore
+    }
+  })();
 }
 
 document.getElementById('btn-club-logout').addEventListener('click', () => {
@@ -474,22 +491,26 @@ document.getElementById('create-event-form').addEventListener('submit', async fu
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner-sm"></span> Creating…';
 
-  let poster_key = null;
-  const posterFile = document.getElementById('ev-poster').files[0];
-  if (posterFile) {
-    const { ok, data } = await uploadFile(posterFile, 'poster');
-    if (!ok) {
-      showAlert('create-event-msg', data.error || 'Failed to upload poster');
+  // Location: either selected existing or new name
+  let location_id = null;
+  const sel = document.getElementById('ev-location');
+  const newLoc = document.getElementById('ev-new-location')?.value.trim();
+  if (newLoc) {
+    try {
+      location_id = await ensureLocation(newLoc);
+    } catch (err) {
+      showAlert('create-event-msg', err.message || 'Failed to create location');
       btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-plus me-1"></i>Create Event';
       return;
     }
-    poster_key = data.key;
+  } else if (sel && sel.value) {
+    location_id = parseInt(sel.value);
   }
 
   const payload = {
     title:          document.getElementById('ev-title').value.trim(),
     description:    document.getElementById('ev-desc').value.trim(),
-    poster_key,
+    location_id,
     start_datetime: document.getElementById('ev-start').value,
     end_datetime:   document.getElementById('ev-end').value,
   };
@@ -563,6 +584,18 @@ async function loadAdminData() {
   sel.innerHTML = `<option value="">– select club –</option>` +
     clubs.map(c => `<option value="${c.id}">${escHtml(c.name)}</option>`).join('');
 
+  // Populate locations for admin event form
+  try {
+    const locations = await fetchLocations();
+    const locSel = document.getElementById('adm-ev-location');
+    if (locSel) {
+      locSel.innerHTML = `<option value="">– select location –</option>` +
+        locations.map(l => `<option value="${l.id}">${escHtml(l.name)}</option>`).join('');
+    }
+  } catch (e) {
+    // ignore errors; locations are optional
+  }
+
   // Clubs list – use event delegation instead of inline onclick
   const clList = document.getElementById('admin-clubs-list');
   if (clubs.length) {
@@ -621,23 +654,10 @@ document.getElementById('create-club-form').addEventListener('submit', async fun
   const btn = this.querySelector('button[type=submit]');
   btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span>';
 
-  let logo_key = null;
-  const logoFile = document.getElementById('cl-logo').files[0];
-  if (logoFile) {
-    const { ok, data } = await uploadFile(logoFile, 'logo');
-    if (!ok) {
-      showAlert('create-club-msg', data.error || 'Logo upload failed');
-      btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-plus me-1"></i>Create Club';
-      return;
-    }
-    logo_key = data.key;
-  }
-
   const { ok, data } = await apiFetch('/api/clubs', {
     method: 'POST',
     body: JSON.stringify({
       name:     document.getElementById('cl-name').value.trim(),
-      logo_key,
       password: document.getElementById('cl-pw').value,
     }),
   });
@@ -657,16 +677,19 @@ document.getElementById('admin-create-event-form').addEventListener('submit', as
   const btn = this.querySelector('button[type=submit]');
   btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span>';
 
-  let poster_key = null;
-  const posterFile = document.getElementById('adm-ev-poster').files[0];
-  if (posterFile) {
-    const { ok, data } = await uploadFile(posterFile, 'poster');
-    if (!ok) {
-      showAlert('adm-create-event-msg', data.error || 'Poster upload failed');
+  let location_id = null;
+  const sel = document.getElementById('adm-ev-location');
+  const newLoc = document.getElementById('adm-ev-new-location')?.value.trim();
+  if (newLoc) {
+    try {
+      location_id = await ensureLocation(newLoc);
+    } catch (err) {
+      showAlert('adm-create-event-msg', err.message || 'Failed to create location');
       btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-plus me-1"></i>Create Event';
       return;
     }
-    poster_key = data.key;
+  } else if (sel && sel.value) {
+    location_id = parseInt(sel.value);
   }
 
   const { ok, data } = await apiFetch('/api/events', {
@@ -675,7 +698,7 @@ document.getElementById('admin-create-event-form').addEventListener('submit', as
       club_id:        parseInt(document.getElementById('adm-ev-club').value),
       title:          document.getElementById('adm-ev-title').value.trim(),
       description:    document.getElementById('adm-ev-desc').value.trim(),
-      poster_key,
+      location_id,
       start_datetime: document.getElementById('adm-ev-start').value,
       end_datetime:   document.getElementById('adm-ev-end').value,
     }),

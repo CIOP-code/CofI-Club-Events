@@ -2,14 +2,11 @@ name = "club-events"
 compatibility_date = "2024-09-23"
 pages_build_output_dir = "public"
 
+
 [[d1_databases]]
 binding = "DB"
-database_name = "club-events-db"
-database_id = "placeholder-replace-with-actual-id"
-
-[[r2_buckets]]
-binding = "BUCKET"
-bucket_name = "club-events-photos"
+database_name = "club-events-db-new"
+database_id = "19af80a0-5d1d-4b07-ab7e-895b6fa3853d"
 
 # Store sensitive values as Wrangler secrets (never in plaintext here):
 #   wrangler pages secret put JWT_SECRET
