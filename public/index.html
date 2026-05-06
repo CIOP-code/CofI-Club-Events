@@ -95,7 +95,7 @@
 
             <!-- Filter bar -->
             <div class="clubs-filter">
-              <input type="text" id="club-search" placeholder="&#xf002; Search clubs…" />
+              <input type="text" id="club-search" placeholder="Search clubs…" />
               <span class="result-count" id="clubs-count"></span>
             </div>
 
@@ -108,7 +108,7 @@
             </div>
 
             <!-- Create event form (shown after club login) -->
-            <div id="create-event-section" class="d-none">
+            <div id="create-event-section" class="d-none p-3">
               <div class="event-form-card">
                 <h5><i class="fa-solid fa-calendar-plus me-2"></i>Create New Event</h5>
                 <form id="create-event-form">
@@ -177,7 +177,7 @@
                 </button>
               </div>
 
-              <div class="row g-3">
+              <div id="senate-actions" class="row g-3 px-2">
                 <!-- Create Club -->
                 <div class="col-12 col-md-6">
                   <div class="section-card">
@@ -267,7 +267,7 @@
           <!-- ======================================================
                ABOUT PAGE
                ====================================================== -->
-          <div id="page-about" class="page">
+          <div id="page-about" class="page p-4">
             <div class="about-hero">
               <h2><i class="fa-solid fa-calendar-days me-2"></i>Club Events</h2>
               <p>What's Happening @ College of Idaho?</p>
@@ -285,7 +285,7 @@
             <div class="about-section">
               <h4><i class="fa-solid fa-map"></i> How to Use</h4>
               <ul>
-                <li><strong>Home</strong> – View the weekly event calendar. Use the navigation arrows to browse
+                <li><strong>Club Events</strong> – View the weekly event calendar. Use the navigation arrows to browse
           past and future weeks. Click any event block to see full details including the event location.</li>
                 <li><strong>Clubs</strong> – Browse all registered clubs. Search by name using the filter bar.
                     Click any club tile to log in as that club and post new events on its behalf.
@@ -324,9 +324,9 @@
                 <div class="avatar">RK</div>
                 <div>
                   <strong>Rabin Kalikote</strong><br />
-                  <a href="https://rabinkalikote.com" target="_blank" rel="noopener">rabinkalikote.com</a>
+                  <a href="https://rabinkalikote.com" target="_blank" rel="noopener">www.rabinkalikote.com</a>
                   <br />
-                  <span style="font-size:.82rem;color:#6b738e;">Full-stack developer &amp; student, College of Idaho</span>
+                  <span style="font-size:.82rem;color:#6b738e;">Software Engineer, Scholar, Seeker</span>
                 </div>
               </div>
             </div>
@@ -378,7 +378,7 @@
     <div class="modal-content">
       <div class="modal-header border-0 pb-0">
         <h5 class="modal-title fw-bold" id="clubLoginModalLabel">
-          <i class="fa-solid fa-lock me-2 text-primary"></i>Club Login
+          <i class="fa-solid fa-lock me-2"></i>Club Login
         </h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
