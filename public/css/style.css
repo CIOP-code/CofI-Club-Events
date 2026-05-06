@@ -52,7 +52,7 @@ body {
 }
 
 /* Ensure Bootstrap's .text-primary maps to the project's primary color */
-.text-primary { color: var(--coi-blue) !important; }
+.text-primary, .bg-primary { background: var(--coi-blue) !important; }
 
 /* ---- Sidebar (desktop) ---- */
 #sidebar {
