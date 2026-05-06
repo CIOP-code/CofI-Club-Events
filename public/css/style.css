@@ -13,7 +13,7 @@
   --nav-active:  var(--coi-gold);
   --event-radius:6px;
   --hour-h:      60px;     /* pixels per hour on the time grid */
-  --day-header-h: 44px; /* per-day header visual height */
+  --day-header-h: 64px; /* per-day header visual height */
 
   /* surface / semantic tokens */
   --color-surface: #ffffff; /* page / card surface */
@@ -250,9 +250,8 @@ body {
   border-top: 1px solid var(--color-border-2);
 }
 .days-headers .day-header {
-  flex: 1 0 100px;
-  min-height: 64px;
-  min-width: 100px;
+  flex: 1 1 0; /* allow header cells to shrink and distribute evenly */
+  height: var(--day-header-h);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -288,11 +287,10 @@ body {
 .days-wrap {
   display: flex;
   flex: 1;
-  overflow-x: auto;
+  overflow-x: hidden; /* prevent horizontal scrolling; allow columns to shrink */
 }
 .day-col {
-  flex: 1;
-  min-width: 100px;
+  flex: 1 1 0; /* share space and shrink to fit */
   border-right: 1px solid var(--color-border-2);
   position: relative;
   overflow: visible;
