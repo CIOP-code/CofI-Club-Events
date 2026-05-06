@@ -167,7 +167,8 @@ async function renderCalendar() {
 
   // Determine visible day range
   let days = [];
-  const isMobile = window.innerWidth < 992;
+  // Treat <768px as mobile (single-day view). Tablets and up show 7-day week view.
+  const isMobile = window.innerWidth < 768;
 
   if (state.calView === 'day' || isMobile) {
     state.calView = 'day';
