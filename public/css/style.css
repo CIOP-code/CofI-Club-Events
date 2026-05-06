@@ -9,7 +9,6 @@
   --coi-gold:    #FFE432; /* accent */
   --coi-light:   #f8f7f9; /* subtle page background */
   --sidebar-w:   220px;
-  --sidebar-bg:  #533860; /* deep accent (0137d90) */
   --sidebar-text:#f4f6fb; /* keep sidebar text light for contrast */
   --nav-hover:   rgba(131,96,136,.12);
   --nav-active:  var(--coi-gold);
@@ -56,88 +55,72 @@ body {
 #sidebar {
   width: var(--sidebar-w);
   min-height: 100vh;
-  background: var(--sidebar-bg);
   display: flex;
   flex-direction: column;
   position: fixed;
   top: 0; left: 0;
   z-index: 100;
   transition: transform .3s;
+  color: #222;
+  height: 100%;
 }
 
-#sidebar .brand {
-  padding: 20px 16px 12px;
-  border-bottom: 1px solid rgba(255,255,255,.08);
-}
-#sidebar .brand h1 {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--coi-gold);
-  margin: 0 0 2px;
-  line-height: 1.2;
-}
-#sidebar .brand p {
-  font-size: .7rem;
-  color: var(--color-muted);
-  margin: 0;
-}
-
+/* Sidebar nav container */
 #sidebar nav {
-  flex: 1;
-  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end; /* right align buttons */
+  justify-content: center; /* center vertically */
+  height: 100%;
+  padding-right: 12px;
 }
 
 .nav-btn {
+  /* square buttons stacked vertically */
+  width: 72px;
+  height: 72px;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 12px 16px;
-  margin-bottom: 4px;
-  background: transparent;
-  border: none;
+  justify-content: center;
+  gap: 6px;
+  padding: 0;
+  margin: 12px 0;
+  background: #ffffff;
+  border: 1px solid #e6e6e6;
   border-radius: 10px;
-  color: var(--sidebar-text);
-  font-size: .92rem;
-  font-weight: 500;
+  color: #222;
+  font-size: .78rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: background .2s, color .2s;
-  text-align: left;
+  transition: transform .12s, box-shadow .12s;
+  text-align: center;
 }
 .nav-btn .icon-wrap {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255,255,255,.07);
-  border-radius: 8px;
-  font-size: 1rem;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 1.25rem;
   flex-shrink: 0;
-  transition: background .2s;
 }
-.nav-btn:hover { background: var(--nav-hover); color: var(--color-surface); }
+.nav-btn .nav-label { display: block; font-size: .68rem; margin-top: 4px; }
+.nav-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 1px 2px rgba(0,0,0,.06);
+}
 .nav-btn.active {
-  background: var(--coi-gold);
-  color: var(--color-strong);
+  background: var(--coi-blue);
+  color: var(--color-surface);
 }
-.nav-btn.active .icon-wrap { background: rgba(0,0,0,.15); }
-
-#sidebar .sidebar-footer {
-  padding: 12px 16px;
-  font-size: .72rem;
-  color: var(--color-muted-2);
-  border-top: 1px solid rgba(255,255,255,.06);
+.nav-btn.active .icon-wrap {
+  color: var(--color-surface);
 }
-
-/* ---- Main content wrapper ---- */
-#content-wrapper {
-  margin-left: var(--sidebar-w);
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-  overflow: visible; /* allow sticky headers to be visible */
+.nav-btn.active .nav-label {
+  color: var(--color-surface);
 }
 
 /* Bootstrap col layout inside content-wrapper */
@@ -176,6 +159,41 @@ body {
 #bottom-nav .bnav-btn i { font-size: 1.25rem; }
 #bottom-nav .bnav-btn.active { color: var(--coi-gold); }
 
+
+#content-wrapper {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 48px);
+  background: var(--color-surface);
+  overflow-y: auto; /* allow internal scrolling */
+  -webkit-overflow-scrolling: touch;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  box-shadow: 0 8px 24px rgba(16,24,50,.04);
+  position: relative;
+}
+
+/* Make inner pages and cards fit the card width */
+#content-wrapper .page {
+  width: 100%;
+}
+
+/* Inner Bootstrap container inside the card should not prevent scrolling */
+#content-wrapper > .container-fluid {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* allow children to shrink for overflow */
+}
+
+/* Make calendar grid fill remaining vertical space so header stays visible */
+#cal-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+
 /* ===================================================
    HOME – CALENDAR
    =================================================== */
@@ -183,8 +201,9 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 14px 0 10px;
+  padding: 14px 16px 10px;
   flex-wrap: wrap;
+  border-bottom: 1px solid var(--color-border-2);
 }
 .calendar-header h2 {
   font-size: 1rem;

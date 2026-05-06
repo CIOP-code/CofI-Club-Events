@@ -8,7 +8,7 @@ A full-stack web application for discovering and managing club events at the Col
 | Environment | URL |
 |---|---|
 | Production (planned) | `clubevents.collegeofidaho.edu` |
-| Staging / workers.dev | `clubevents.collegeofidaho.rabinkalikote33.workers.dev` |
+| Staging / workers.dev | `club-events.pages.dev` |
 
 ## Technology Stack
 
