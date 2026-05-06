@@ -50,7 +50,13 @@ function navigate(page) {
 }
 
 document.querySelectorAll('[data-page]').forEach(btn => {
-  btn.addEventListener('click', () => navigate(btn.dataset.page));
+  btn.addEventListener('click', (e) => {
+    // If the brand button (Club Events) is clicked, allow the calendar to re-run the "scroll to now"
+    if (btn.classList.contains('brand-btn') && btn.dataset.page === 'home') {
+      state._hasScrolledToNow = false;
+    }
+    navigate(btn.dataset.page);
+  });
 });
 
 /* =============================================================
@@ -210,10 +216,7 @@ async function renderCalendar() {
     });
 
     html += `<div class="day-col">`;
-    html += `<div class="day-header${isToday ? ' today' : ''}">
-      <div class="day-name">${DAYS_SHORT[day.getDay()]}</div>
-      <div class="day-num">${day.getDate()}</div>
-    </div>`;
+    // header moved into #days-headers; reserve body space here
     html += `<div class="day-body" data-date="${day.toISOString()}">`;
 
     // Hour lines
@@ -259,15 +262,65 @@ async function renderCalendar() {
 
   grid.innerHTML = html;
 
+  // Render day headers into the top header area so they stick together with .calendar-header
+  const daysHeadersEl = document.getElementById('days-headers');
+  if (daysHeadersEl) {
+    daysHeadersEl.innerHTML = days.map(d => {
+      const isToday = startOfDay(d).getTime() === today.getTime();
+      return `<div class="day-header${isToday ? ' today' : ''}">
+        <div class="day-name">${DAYS_SHORT[d.getDay()]}</div>
+        <div class="day-num">${d.getDate()}</div>
+      </div>`;
+    }).join('');
+
+    // sync horizontal scroll
+    const headerScroll = daysHeadersEl;
+    const gridScroll = document.querySelector('.days-wrap');
+    if (gridScroll) {
+      headerScroll.onscroll = () => { gridScroll.scrollLeft = headerScroll.scrollLeft; };
+      gridScroll.onscroll = () => { headerScroll.scrollLeft = gridScroll.scrollLeft; };
+    }
+  }
+
   // Event block click → modal
   grid.querySelectorAll('.cal-event').forEach(el => {
     el.addEventListener('click', () => openEventModal(el.dataset.evId, events));
   });
 
-  // Scroll to 7am on load — respect the CSS day-header height variable so offsets match
-  const dayHeaderH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--day-header-h')) || 52;
-  const scrollTo = 7 * HOUR_H + dayHeaderH; // align so 7am sits below headers
-  wrap.scrollTop = scrollTo;
+  // On first render, try to scroll so the current time is visible.
+  // Find the vertical scroll container (closest ancestor with overflow:auto/scroll) so we scroll the correct element.
+  function findVerticalScrollContainer(el) {
+    let p = el.parentElement;
+    while (p) {
+      const st = getComputedStyle(p).overflowY;
+      if (st === 'auto' || st === 'scroll') return p;
+      p = p.parentElement;
+    }
+    return document.documentElement;
+  }
+
+  if (!state._hasScrolledToNow) {
+    const nowEl = grid.querySelector('.now-line');
+    const container = findVerticalScrollContainer(grid) || document.documentElement;
+    if (nowEl && container) {
+      const nowRect = nowEl.getBoundingClientRect();
+      const contRect = container.getBoundingClientRect();
+      const headerEl = document.querySelector('.calendar-header');
+      const headerH = headerEl ? headerEl.getBoundingClientRect().height : 0;
+      // Small top margin so the now-line isn't flush with the header
+      const margin = 24;
+      const delta = nowRect.top - (contRect.top + headerH + margin);
+      // Adjust scrollTop by delta (works for both documentElement and scrollable container)
+      container.scrollTop = (container.scrollTop || 0) + delta;
+    } else {
+      // Fall back to scrolling to 7am (previous behavior)
+      const dayHeaderH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--day-header-h')) || 52;
+      const scrollTo = 7 * HOUR_H + dayHeaderH; // align so 7am sits below headers
+      const container = findVerticalScrollContainer(grid) || document.documentElement;
+      container.scrollTop = scrollTo;
+    }
+    state._hasScrolledToNow = true;
+  }
 }
 
 function escHtml(str) {

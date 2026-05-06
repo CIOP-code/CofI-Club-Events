@@ -8,13 +8,11 @@
   --coi-blue:    #533860; /* primary - updated to user request */
   --coi-gold:    #FFE432; /* accent */
   --coi-light:   #f8f7f9; /* subtle page background */
-  --sidebar-w:   220px;
   --sidebar-text:#f4f6fb; /* keep sidebar text light for contrast */
   --nav-hover:   rgba(131,96,136,.12);
   --nav-active:  var(--coi-gold);
   --event-radius:6px;
   --hour-h:      60px;     /* pixels per hour on the time grid */
-  --calendar-header-h: 56px; /* fixed visual height used for sticky offsets */
   --day-header-h: 44px; /* per-day header visual height */
 
   /* surface / semantic tokens */
@@ -55,12 +53,9 @@ body {
 
 /* ---- Sidebar (desktop) ---- */
 #sidebar {
-  width: var(--sidebar-w);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  position: fixed;
-  top: 0; left: 0;
   z-index: 100;
   transition: transform .3s;
   color: #222;
@@ -198,8 +193,7 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: var(--calendar-header-h);
-  padding: 0 16px; /* vertical centering handled by fixed height */
+  padding: 16px 16px 0; /* vertical centering handled by fixed height */
   flex-wrap: wrap;
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border-2);
@@ -244,6 +238,33 @@ body {
   /* ensure children can overflow and sticky headers can position relative to the wrap */
   overflow: visible;
 }
+
+/* Horizontal day headers bar (renders inside calendar header) */
+.days-headers {
+  display: flex;
+  width: calc(100% + 32px); 
+  gap: 0;
+  padding-left: 52px;
+  margin-left: -16px;
+  margin-right: -16px;
+  border-top: 1px solid var(--color-border-2);
+}
+.days-headers .day-header {
+  flex: 1 0 100px;
+  min-height: 64px;
+  min-width: 100px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  border-right: 1px solid var(--color-border-2);
+  background: var(--color-surface);
+}
+.days-headers .day-header:last-child { border-right: none; }
+
+/* reserve top space inside day-body for the moved header */
+.day-body { padding-top: var(--day-header-h); min-height: 300px; }
 
 /* Time label column */
 .time-col {
@@ -290,7 +311,6 @@ body {
   justify-content: center;
   padding: 0 6px; /* minimal horizontal padding */
   text-align: center;
-  border-bottom: 1px solid var(--color-border-2);
 }
 .day-header .day-name {
   font-size: .7rem;
@@ -347,27 +367,6 @@ body {
   background: var(--color-danger);
   border-radius: 50%;
 }
-
-  :root {
-    /* Colors */
-  --color-primary: #533860; /* e-global-color-primary (updated) */
-  --color-secondary: #54595F; /* e-global-color-secondary */
-  --color-text: #7A7A7A; /* e-global-color-text */
-  --color-accent: #FFE432; /* e-global-color-accent */
-  --color-0137d90: #420C31; /* e-global-color-0137d90 */
-
-    /* Typography */
-    --font-primary: 'Roboto Slab', serif; /* e-global-typography-primary-font-family */
-    --font-primary-weight: 700;          /* e-global-typography-primary-font-weight */
-    --font-secondary: 'Source Sans 3', sans-serif; /* e-global-typography-secondary-font-family */
-    --font-secondary-weight: 700;       /* e-global-typography-secondary-font-weight */
-    --font-text: 'Source Sans 3', sans-serif;      /* e-global-typography-text-font-family */
-    --font-text-weight: 400;            /* e-global-typography-text-font-weight */
-    --font-accent: 'Roboto', sans-serif;           /* e-global-typography-accent-font-family */
-    --font-accent-weight: 500;          /* e-global-typography-accent-font-weight */
-
-    font-size: 16px;
-  }
 
 
 /* Event blocks */
