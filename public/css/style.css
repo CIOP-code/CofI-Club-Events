@@ -139,7 +139,7 @@ body {
   display: none;
   position: fixed;
   bottom: 0; left: 0; right: 0;
-  background: var(--sidebar-bg);
+  background: var(--coi-blue);
   z-index: 200;
   border-top: 1px solid rgba(255,255,255,.08);
 }
@@ -233,10 +233,10 @@ body {
 
 /* Time grid */
 .calendar-grid-wrap {
-  overflow-y: auto;
+  /* do not create a separate vertical scroll container here; let #content-wrapper scroll */
+  overflow: visible;
   border-radius: 10px;
-  position: relative; /* make this the reference for sticky day headers */
-  -webkit-overflow-scrolling: touch; /* smoother scrolling on iOS */
+  position: relative;
 }
 .calendar-grid {
   display: flex;
@@ -683,7 +683,7 @@ body {
    =================================================== */
 @media (max-width: 991px) {
   #sidebar { display: none; }
-  #content-wrapper { margin-left: 0; padding-bottom: 70px; }
+  #content-wrapper { height: 87vh;}
   #bottom-nav { display: flex; }
 
   .clubs-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
