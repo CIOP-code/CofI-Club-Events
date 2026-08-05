@@ -7,7 +7,7 @@ pages_build_output_dir = "public"
 [[d1_databases]]
 binding = "DB"
 database_name = "club-events-db-new"
-database_id = "19af80a0-5d1d-4b07-ab7e-895b6fa3853d"
+database_id = "ecf69327-715b-4fc9-97c6-36dc75a631e0"
 
 # Store sensitive values as Wrangler secrets (never in plaintext here):
 #   wrangler pages secret put JWT_SECRET
