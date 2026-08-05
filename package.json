@@ -1,7 +1,7 @@
 {
   "name": "club-events",
   "version": "1.0.0",
-  "description": "Club Events app for College of Idaho – built on Cloudflare Pages + Workers + D1",
+  "description": "Campus Events app for College of Idaho – built on Cloudflare Pages + Workers + D1",
   "scripts": {
     "predev": "pkill -f \"wrangler pages dev\" || true && wrangler d1 execute DB --file=schema.sql || true",
     "dev": "wrangler pages dev public --d1=DB",

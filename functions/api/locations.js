@@ -1,6 +1,6 @@
 /**
  * GET  /api/locations   – list all locations
- * POST /api/locations   – create a new location (requires club or admin auth)
+ * POST /api/locations   – create a new location (requires entity or admin auth)
  */
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -20,7 +20,7 @@ export async function onRequestGet({ env }) {
 
 export async function onRequestPost({ env, request, data }) {
   const user = data?.user;
-  if (!user || (user.type !== 'club' && user.type !== 'admin')) {
+  if (!user || (user.type !== 'entity' && user.type !== 'admin')) {
     return json({ error: 'Unauthorized' }, 401);
   }
 

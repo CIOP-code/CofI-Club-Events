@@ -1,5 +1,5 @@
 /**
- * Club Events – College of Idaho
+ * Campus Events – College of Idaho
  * app.js  |  Single-Page Application controller
  */
 
@@ -11,10 +11,10 @@ const state = {
   calView: 'week',            // 'week' | 'day'
   calAnchorDate: new Date(),  // reference date for calendar view
   events: [],
-  clubs: [],
-  loggedInClub: null,   // { id, name, token }
+  entities: [],
+  loggedInEntity: null,   // { id, name, type, token }
   adminToken: null,
-  pendingLoginClub: null,  // club object waiting for password
+  pendingLoginEntity: null,  // entity object waiting for password
 };
 
 /* Ensure CSS variable for calendar header height matches the rendered size.
@@ -45,13 +45,13 @@ function navigate(page) {
   state.currentPage = page;
 
   if (page === 'home') renderCalendar();
-  if (page === 'clubs') loadClubs();
-  if (page === 'senate') renderSenatePage();
+  if (page === 'entities') loadEntities();
+  if (page === 'admin') renderAdminPage();
 }
 
 document.querySelectorAll('[data-page]').forEach(btn => {
   btn.addEventListener('click', (e) => {
-    // If the brand button (Club Events) is clicked, allow the calendar to re-run the "scroll to now"
+    // If the brand button (Campus Events) is clicked, allow the calendar to re-run the "scroll to now"
     if (btn.classList.contains('brand-btn') && btn.dataset.page === 'home') {
       state._hasScrolledToNow = false;
     }
@@ -91,14 +91,21 @@ function getWeekStart(d) {
   return r;
 }
 
-/** Pick a visually distinct color for an event based on its club ID */
+/** Pick a visually distinct color for an event based on its entity ID */
 const PALETTE = [
   '#1565c0','#6a1b9a','#00695c','#b71c1c','#e65100',
   '#37474f','#4527a0','#2e7d32','#ad1457','#0277bd',
 ];
-function eventColor(clubId) {
-  return PALETTE[(clubId % PALETTE.length)];
+function eventColor(entityId) {
+  return PALETTE[(entityId % PALETTE.length)];
 }
+
+const TYPE_LABELS = {
+  club: 'Club',
+  department: 'Department',
+  office: 'Office',
+  organization: 'Organization',
+};
 
 /** Show an inline alert */
 function showAlert(elId, msg, type = 'danger') {
@@ -119,7 +126,7 @@ function hideAlert(elId) {
 async function apiFetch(path, opts = {}) {
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
 
-  const token = state.loggedInClub?.token || state.adminToken;
+  const token = state.loggedInEntity?.token || state.adminToken;
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const res = await fetch(path, { ...opts, headers });
@@ -133,7 +140,7 @@ async function fetchLocations() {
 }
 
 async function ensureLocation(newName) {
-  const token = state.loggedInClub?.token || state.adminToken;
+  const token = state.loggedInEntity?.token || state.adminToken;
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch('/api/locations', { method: 'POST', headers, body: JSON.stringify({ name: newName }) });
@@ -244,7 +251,7 @@ async function renderCalendar() {
 
       const topPx    = startMin * (HOUR_H / 60);
       const heightPx = duration * (HOUR_H / 60);
-      const color = eventColor(ev.club_id);
+      const color = eventColor(ev.entity_id);
       const timeStr = `${fmt(start,{hour:'numeric',minute:'2-digit'})} – ${fmt(end,{hour:'numeric',minute:'2-digit'})}`;
 
       html += `<div class="cal-event"
@@ -253,7 +260,7 @@ async function renderCalendar() {
           title="${escHtml(ev.title)} · ${escHtml(timeStr)}">
         <div class="ev-title">${escHtml(ev.title)}</div>
         <div class="ev-location">${escHtml(ev.location_name || '')}</div>
-        <div class="ev-club">${escHtml(ev.club_name || '')}</div>
+        <div class="ev-entity">${escHtml(ev.entity_name || '')}</div>
       </div>`;
     });
 
@@ -340,7 +347,7 @@ function openEventModal(evId, events) {
 
   document.getElementById('eventModalLabel').textContent = ev.title;
   document.getElementById('event-modal-title').textContent = ev.title;
-  document.getElementById('event-modal-club-badge').textContent = ev.club_name || '';
+  document.getElementById('event-modal-entity-badge').textContent = ev.entity_name || '';
   document.getElementById('event-modal-time').textContent =
     `${fmt(start,{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})} – ${fmt(end,{hour:'numeric',minute:'2-digit'})}`;
   document.getElementById('event-modal-desc').textContent = ev.description || 'No description provided.';
@@ -398,45 +405,56 @@ function debounce(fn, ms) {
 }
 
 /* =============================================================
-   CLUBS PAGE
+   ENTITIES PAGE
    ============================================================= */
-async function loadClubs() {
-  const grid = document.getElementById('clubs-grid');
+async function loadEntities() {
+  const grid = document.getElementById('entities-grid');
   grid.innerHTML = `<div class="text-center text-muted py-5 col-12">
-    <i class="fa-solid fa-spinner fa-spin fa-2x mb-2"></i><p>Loading clubs…</p></div>`;
+    <i class="fa-solid fa-spinner fa-spin fa-2x mb-2"></i><p>Loading entities…</p></div>`;
 
-  const { ok, data } = await apiFetch('/api/clubs');
-  state.clubs = ok ? (data.clubs || []) : [];
-  renderClubsGrid(state.clubs);
+  const { ok, data } = await apiFetch('/api/entities');
+  state.entities = ok ? (data.entities || []) : [];
+  applyEntityFilters();
 }
 
-function renderClubsGrid(clubs) {
-  const grid = document.getElementById('clubs-grid');
-  const count = document.getElementById('clubs-count');
+function applyEntityFilters() {
+  const q = document.getElementById('entity-search').value.trim().toLowerCase();
+  const type = document.getElementById('entity-type-filter').value;
+  let filtered = state.entities;
+  if (q) filtered = filtered.filter(e => e.name.toLowerCase().includes(q));
+  if (type) filtered = filtered.filter(e => e.type === type);
+  renderEntitiesGrid(filtered);
+}
 
-  if (!clubs.length) {
+function renderEntitiesGrid(entities) {
+  const grid = document.getElementById('entities-grid');
+  const count = document.getElementById('entities-count');
+
+  if (!entities.length) {
     grid.innerHTML = `<div class="text-center text-muted py-5 col-12">
       <i class="fa-solid fa-face-sad-tear fa-2x mb-2"></i>
-      <p>No clubs found.</p></div>`;
+      <p>No entities found.</p></div>`;
     count.textContent = '';
     return;
   }
 
-  count.textContent = `${clubs.length} club${clubs.length !== 1 ? 's' : ''}`;
+  count.textContent = `${entities.length} entit${entities.length !== 1 ? 'ies' : 'y'}`;
 
-  grid.innerHTML = clubs.map(club => {
-    // Use a Font Awesome icon + club initial instead of storing a logo
-    const logoHtml = `<div class="club-logo-placeholder"><i class="fa-solid fa-user-group"></i><span>${escHtml(club.name.charAt(0).toUpperCase())}</span></div>`;
-    return `<div class="club-tile" data-club-id="${club.id}" data-club-name="${escHtml(club.name)}"
-                 tabindex="0" role="button" aria-label="Login as ${escHtml(club.name)}">
+  grid.innerHTML = entities.map(entity => {
+    // Use a Font Awesome icon + initial instead of storing a logo
+    const logoHtml = `<div class="entity-logo-placeholder"><i class="fa-solid fa-user-group"></i><span>${escHtml(entity.name.charAt(0).toUpperCase())}</span></div>`;
+    const typeLabel = TYPE_LABELS[entity.type] || entity.type;
+    return `<div class="entity-tile" data-entity-id="${entity.id}" data-entity-name="${escHtml(entity.name)}"
+                 tabindex="0" role="button" aria-label="Login as ${escHtml(entity.name)}">
+      <span class="entity-type-badge">${escHtml(typeLabel)}</span>
       ${logoHtml}
-      <div class="club-name">${escHtml(club.name)}</div>
+      <div class="entity-name">${escHtml(entity.name)}</div>
     </div>`;
   }).join('');
 
-  grid.querySelectorAll('.club-tile').forEach(tile => {
-    tile.addEventListener('click', () => openClubLoginModal(
-      parseInt(tile.dataset.clubId), tile.dataset.clubName
+  grid.querySelectorAll('.entity-tile').forEach(tile => {
+    tile.addEventListener('click', () => openEntityLoginModal(
+      parseInt(tile.dataset.entityId), tile.dataset.entityName
     ));
     tile.addEventListener('keydown', e => {
       if (e.key === 'Enter' || e.key === ' ') tile.click();
@@ -444,58 +462,55 @@ function renderClubsGrid(clubs) {
   });
 }
 
-// Club search/filter
-document.getElementById('club-search').addEventListener('input', function () {
-  const q = this.value.trim().toLowerCase();
-  const filtered = q ? state.clubs.filter(c => c.name.toLowerCase().includes(q)) : state.clubs;
-  renderClubsGrid(filtered);
-});
+// Entity search/filter
+document.getElementById('entity-search').addEventListener('input', applyEntityFilters);
+document.getElementById('entity-type-filter').addEventListener('change', applyEntityFilters);
 
-function openClubLoginModal(clubId, clubName) {
-  state.pendingLoginClub = { id: clubId, name: clubName };
-  document.getElementById('clubLoginModalLabel').innerHTML =
-    `<i class="fa-solid fa-lock me-2 text-primary"></i>Login – ${escHtml(clubName)}`;
-  document.getElementById('club-modal-name').textContent =
-    `Enter the password for ${clubName} to post events.`;
-  document.getElementById('club-login-pw').value = '';
-  hideAlert('club-login-msg');
-  const modal = new bootstrap.Modal(document.getElementById('clubLoginModal'));
+function openEntityLoginModal(entityId, entityName) {
+  state.pendingLoginEntity = { id: entityId, name: entityName };
+  document.getElementById('entityLoginModalLabel').innerHTML =
+    `<i class="fa-solid fa-lock me-2 text-primary"></i>Login – ${escHtml(entityName)}`;
+  document.getElementById('entity-modal-name').textContent =
+    `Enter the password for ${entityName} to post events.`;
+  document.getElementById('entity-login-pw').value = '';
+  hideAlert('entity-login-msg');
+  const modal = new bootstrap.Modal(document.getElementById('entityLoginModal'));
   modal.show();
 }
 
-document.getElementById('club-login-form').addEventListener('submit', async function (e) {
+document.getElementById('entity-login-form').addEventListener('submit', async function (e) {
   e.preventDefault();
-  const pw = document.getElementById('club-login-pw').value;
-  hideAlert('club-login-msg');
+  const pw = document.getElementById('entity-login-pw').value;
+  hideAlert('entity-login-msg');
   const btn = this.querySelector('button[type=submit]');
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner-sm"></span> Logging in…';
 
-  const { ok, data } = await apiFetch('/api/auth/club', {
+  const { ok, data } = await apiFetch('/api/auth/entity', {
     method: 'POST',
-    body: JSON.stringify({ club_id: state.pendingLoginClub.id, password: pw }),
+    body: JSON.stringify({ entity_id: state.pendingLoginEntity.id, password: pw }),
   });
 
   btn.disabled = false;
   btn.textContent = 'Login';
 
   if (!ok) {
-    showAlert('club-login-msg', data.error || 'Login failed');
+    showAlert('entity-login-msg', data.error || 'Login failed');
     return;
   }
 
   // Store session
-  state.loggedInClub = { ...data.club, token: data.token };
-  bootstrap.Modal.getInstance(document.getElementById('clubLoginModal')).hide();
-  onClubLogin();
+  state.loggedInEntity = { ...data.entity, token: data.token };
+  bootstrap.Modal.getInstance(document.getElementById('entityLoginModal')).hide();
+  onEntityLogin();
 });
 
-function onClubLogin() {
-  const banner = document.getElementById('club-login-banner');
-  document.getElementById('logged-club-name').textContent = state.loggedInClub.name;
+function onEntityLogin() {
+  const banner = document.getElementById('entity-login-banner');
+  document.getElementById('logged-entity-name').textContent = state.loggedInEntity.name;
   banner.classList.remove('d-none');
   document.getElementById('create-event-section').classList.remove('d-none');
-  // Populate locations for club create-event form
+  // Populate locations for entity create-event form
   (async () => {
     try {
       const locations = await fetchLocations();
@@ -510,9 +525,9 @@ function onClubLogin() {
   })();
 }
 
-document.getElementById('btn-club-logout').addEventListener('click', () => {
-  state.loggedInClub = null;
-  document.getElementById('club-login-banner').classList.add('d-none');
+document.getElementById('btn-entity-logout').addEventListener('click', () => {
+  state.loggedInEntity = null;
+  document.getElementById('entity-login-banner').classList.add('d-none');
   document.getElementById('create-event-section').classList.add('d-none');
 });
 
@@ -550,7 +565,7 @@ document.getElementById('change-pw-form').addEventListener('submit', async funct
   setTimeout(() => bootstrap.Modal.getInstance(document.getElementById('changePwModal')).hide(), 1500);
 });
 
-// Create event (club user)
+// Create event (entity user)
 document.getElementById('create-event-form').addEventListener('submit', async function (e) {
   e.preventDefault();
   hideAlert('create-event-msg');
@@ -597,16 +612,16 @@ document.getElementById('create-event-form').addEventListener('submit', async fu
 });
 
 /* =============================================================
-   SENATE PAGE
+   ADMIN PAGE
    ============================================================= */
-function renderSenatePage() {
+function renderAdminPage() {
   if (state.adminToken) {
-    document.getElementById('senate-login').classList.add('d-none');
-    document.getElementById('senate-panel').classList.remove('d-none');
+    document.getElementById('admin-login').classList.add('d-none');
+    document.getElementById('admin-panel').classList.remove('d-none');
     loadAdminData();
   } else {
-    document.getElementById('senate-login').classList.remove('d-none');
-    document.getElementById('senate-panel').classList.add('d-none');
+    document.getElementById('admin-login').classList.remove('d-none');
+    document.getElementById('admin-panel').classList.add('d-none');
   }
 }
 
@@ -629,27 +644,27 @@ document.getElementById('admin-login-form').addEventListener('submit', async fun
   if (!ok) { showAlert('admin-login-msg', data.error || 'Login failed'); return; }
 
   state.adminToken = data.token;
-  document.getElementById('senate-login').classList.add('d-none');
-  document.getElementById('senate-panel').classList.remove('d-none');
+  document.getElementById('admin-login').classList.add('d-none');
+  document.getElementById('admin-panel').classList.remove('d-none');
   loadAdminData();
 });
 
 document.getElementById('btn-admin-logout').addEventListener('click', () => {
   state.adminToken = null;
-  document.getElementById('senate-panel').classList.add('d-none');
-  document.getElementById('senate-login').classList.remove('d-none');
+  document.getElementById('admin-panel').classList.add('d-none');
+  document.getElementById('admin-login').classList.remove('d-none');
   document.getElementById('admin-pw').value = '';
 });
 
 async function loadAdminData() {
-  // Load clubs for the dropdown + clubs list
-  const { ok, data } = await apiFetch('/api/clubs');
-  const clubs = ok ? (data.clubs || []) : [];
+  // Load entities for the dropdown + entities list
+  const { ok, data } = await apiFetch('/api/entities');
+  const entities = ok ? (data.entities || []) : [];
 
-  // Populate club select
-  const sel = document.getElementById('adm-ev-club');
-  sel.innerHTML = `<option value="">– select club –</option>` +
-    clubs.map(c => `<option value="${c.id}">${escHtml(c.name)}</option>`).join('');
+  // Populate entity select
+  const sel = document.getElementById('adm-ev-entity');
+  sel.innerHTML = `<option value="">– select entity –</option>` +
+    entities.map(en => `<option value="${en.id}">${escHtml(en.name)}</option>`).join('');
 
   // Populate locations for admin event form
   try {
@@ -663,25 +678,25 @@ async function loadAdminData() {
     // ignore errors; locations are optional
   }
 
-  // Clubs list – use event delegation instead of inline onclick
-  const clList = document.getElementById('admin-clubs-list');
-  if (clubs.length) {
-    clList.innerHTML = clubs.map(c => `
+  // Entities list – use event delegation instead of inline onclick
+  const enList = document.getElementById('admin-entities-list');
+  if (entities.length) {
+    enList.innerHTML = entities.map(en => `
       <div class="event-list-item">
         <div class="ev-info">
-          <div class="ev-title-txt">${escHtml(c.name)}</div>
-          <div class="ev-meta-txt">ID: ${c.id} · Created: ${new Date(c.created_at).toLocaleDateString()}</div>
+          <div class="ev-title-txt">${escHtml(en.name)} <span class="text-muted small">(${escHtml(TYPE_LABELS[en.type] || en.type)})</span></div>
+          <div class="ev-meta-txt">ID: ${en.id} · Created: ${new Date(en.created_at).toLocaleDateString()}</div>
         </div>
-        <button class="btn btn-sm btn-outline-danger" data-delete-club="${c.id}">
+        <button class="btn btn-sm btn-outline-danger" data-delete-entity="${en.id}">
           <i class="fa-solid fa-trash"></i>
         </button>
       </div>`).join('');
 
-    clList.querySelectorAll('[data-delete-club]').forEach(btn => {
-      btn.addEventListener('click', () => adminDeleteClub(parseInt(btn.dataset.deleteClub)));
+    enList.querySelectorAll('[data-delete-entity]').forEach(btn => {
+      btn.addEventListener('click', () => adminDeleteEntity(parseInt(btn.dataset.deleteEntity)));
     });
   } else {
-    clList.innerHTML = '<p class="text-muted small">No clubs yet.</p>';
+    enList.innerHTML = '<p class="text-muted small">No entities yet.</p>';
   }
 
   // Events list
@@ -699,7 +714,7 @@ async function loadAdminEvents() {
       <div class="event-list-item">
         <div class="ev-info">
           <div class="ev-title-txt">${escHtml(ev.title)}</div>
-          <div class="ev-meta-txt">${escHtml(ev.club_name)} · ${new Date(ev.start_datetime).toLocaleString()}</div>
+          <div class="ev-meta-txt">${escHtml(ev.entity_name)} · ${new Date(ev.start_datetime).toLocaleString()}</div>
         </div>
         <button class="btn btn-sm btn-outline-danger" data-delete-event="${ev.id}">
           <i class="fa-solid fa-trash"></i>
@@ -714,25 +729,26 @@ async function loadAdminEvents() {
   }
 }
 
-// Create club (admin)
-document.getElementById('create-club-form').addEventListener('submit', async function (e) {
+// Create entity (admin)
+document.getElementById('create-entity-form').addEventListener('submit', async function (e) {
   e.preventDefault();
-  hideAlert('create-club-msg');
+  hideAlert('create-entity-msg');
   const btn = this.querySelector('button[type=submit]');
   btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span>';
 
-  const { ok, data } = await apiFetch('/api/clubs', {
+  const { ok, data } = await apiFetch('/api/entities', {
     method: 'POST',
     body: JSON.stringify({
-      name:     document.getElementById('cl-name').value.trim(),
-      password: document.getElementById('cl-pw').value,
+      name:     document.getElementById('ent-name').value.trim(),
+      type:     document.getElementById('ent-type').value,
+      password: document.getElementById('ent-pw').value,
     }),
   });
 
-  btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-plus me-1"></i>Create Club';
+  btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-plus me-1"></i>Create Entity';
 
-  if (!ok) { showAlert('create-club-msg', data.error || 'Failed to create club'); return; }
-  showAlert('create-club-msg', 'Club created!', 'success');
+  if (!ok) { showAlert('create-entity-msg', data.error || 'Failed to create entity'); return; }
+  showAlert('create-entity-msg', 'Entity created!', 'success');
   this.reset();
   loadAdminData();
 });
@@ -762,7 +778,7 @@ document.getElementById('admin-create-event-form').addEventListener('submit', as
   const { ok, data } = await apiFetch('/api/events', {
     method: 'POST',
     body: JSON.stringify({
-      club_id:        parseInt(document.getElementById('adm-ev-club').value),
+      entity_id:      parseInt(document.getElementById('adm-ev-entity').value),
       title:          document.getElementById('adm-ev-title').value.trim(),
       description:    document.getElementById('adm-ev-desc').value.trim(),
       location_id,
@@ -779,11 +795,11 @@ document.getElementById('admin-create-event-form').addEventListener('submit', as
   loadAdminEvents();
 });
 
-// Delete club (no longer needs to be on window – called via event delegation)
-async function adminDeleteClub(id) {
-  if (!confirm('Delete this club and all its events?')) return;
-  const { ok, data } = await apiFetch(`/api/clubs/${id}`, { method: 'DELETE' });
-  if (!ok) { alert(data.error || 'Failed to delete club'); return; }
+// Delete entity (no longer needs to be on window – called via event delegation)
+async function adminDeleteEntity(id) {
+  if (!confirm('Delete this entity and all its events?')) return;
+  const { ok, data } = await apiFetch(`/api/entities/${id}`, { method: 'DELETE' });
+  if (!ok) { alert(data.error || 'Failed to delete entity'); return; }
   loadAdminData();
 }
 

@@ -1,7 +1,7 @@
 /**
  * POST /api/auth/change-password
  * Body: { current_password, new_password }
- * Requires club auth token.
+ * Requires entity auth token.
  */
 import { verifyPassword, hashPassword, generateSalt } from '../../utils/crypto.js';
 
@@ -14,8 +14,8 @@ function json(data, status = 200) {
 
 export async function onRequestPost({ env, request, data }) {
   const user = data?.user;
-  if (!user || user.type !== 'club') {
-    return json({ error: 'Unauthorized – club login required' }, 401);
+  if (!user || user.type !== 'entity') {
+    return json({ error: 'Unauthorized – entity login required' }, 401);
   }
 
   let body;
@@ -30,21 +30,21 @@ export async function onRequestPost({ env, request, data }) {
   }
 
   try {
-    const club = await env.DB.prepare(
-      'SELECT password_hash, salt FROM clubs WHERE id = ?'
-    ).bind(user.club_id).first();
+    const entity = await env.DB.prepare(
+      'SELECT password_hash, salt FROM entities WHERE id = ?'
+    ).bind(user.entity_id).first();
 
-    if (!club) return json({ error: 'Club not found' }, 404);
+    if (!entity) return json({ error: 'Entity not found' }, 404);
 
-    const valid = await verifyPassword(current_password, club.password_hash, club.salt);
+    const valid = await verifyPassword(current_password, entity.password_hash, entity.salt);
     if (!valid) return json({ error: 'Current password is incorrect' }, 401);
 
     const newSalt = generateSalt();
     const newHash = await hashPassword(new_password, newSalt);
 
     await env.DB.prepare(
-      'UPDATE clubs SET password_hash = ?, salt = ? WHERE id = ?'
-    ).bind(newHash, newSalt, user.club_id).run();
+      'UPDATE entities SET password_hash = ?, salt = ? WHERE id = ?'
+    ).bind(newHash, newSalt, user.entity_id).run();
 
     return json({ message: 'Password changed successfully' });
   } catch (err) {

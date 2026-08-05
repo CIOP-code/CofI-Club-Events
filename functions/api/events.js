@@ -1,6 +1,6 @@
 /**
  * GET  /api/events?start=&end=   – list events (with optional date range filter)
- * POST /api/events                – create a new event (requires club or admin auth)
+ * POST /api/events                – create a new event (requires entity or admin auth)
  */
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -15,9 +15,9 @@ export async function onRequestGet({ env, request }) {
   const end   = url.searchParams.get('end');
 
   let query = `
-    SELECT e.*, c.name AS club_name, l.name AS location_name
+    SELECT e.*, en.name AS entity_name, en.type AS entity_type, l.name AS location_name
     FROM events e
-    JOIN clubs c ON e.club_id = c.id
+    JOIN entities en ON e.entity_id = en.id
     LEFT JOIN locations l ON e.location_id = l.id
   `;
   const params = [];
@@ -42,7 +42,7 @@ export async function onRequestGet({ env, request }) {
 
 export async function onRequestPost({ env, request, data }) {
   const user = data?.user;
-  if (!user || (user.type !== 'club' && user.type !== 'admin')) {
+  if (!user || (user.type !== 'entity' && user.type !== 'admin')) {
     return json({ error: 'Unauthorized' }, 401);
   }
 
@@ -58,17 +58,17 @@ export async function onRequestPost({ env, request, data }) {
     return json({ error: 'title, start_datetime, and end_datetime are required' }, 400);
   }
 
-  // Admin can specify any club_id; club users use their own club_id
-  const club_id = user.type === 'admin' ? (body.club_id || 0) : user.club_id;
-  if (!club_id) {
-    return json({ error: 'club_id is required' }, 400);
+  // Admin can specify any entity_id; entity users use their own entity_id
+  const entity_id = user.type === 'admin' ? (body.entity_id || 0) : user.entity_id;
+  if (!entity_id) {
+    return json({ error: 'entity_id is required' }, 400);
   }
 
   try {
     const result = await env.DB.prepare(
-      `INSERT INTO events (title, description, location_id, start_datetime, end_datetime, club_id)
+      `INSERT INTO events (title, description, location_id, start_datetime, end_datetime, entity_id)
        VALUES (?, ?, ?, ?, ?, ?)`
-    ).bind(title, description || '', location_id || null, start_datetime, end_datetime, club_id).run();
+    ).bind(title, description || '', location_id || null, start_datetime, end_datetime, entity_id).run();
 
     return json({ id: result.meta.last_row_id, message: 'Event created' }, 201);
   } catch (err) {
