@@ -43,7 +43,7 @@ export async function onRequestPost({ env, request, data }) {
     const newHash = await hashPassword(new_password, newSalt);
 
     await env.DB.prepare(
-      'UPDATE entities SET password_hash = ?, salt = ? WHERE id = ?'
+      'UPDATE entities SET password_hash = ?, salt = ?, must_change_password = 0 WHERE id = ?'
     ).bind(newHash, newSalt, user.entity_id).run();
 
     return json({ message: 'Password changed successfully' });
