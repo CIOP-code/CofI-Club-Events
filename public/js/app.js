@@ -135,6 +135,40 @@ function entityVariantShade(baseColor, variant) {
   return shadeColor(baseColor, sign * step);
 }
 
+// Perceptual-ish distance between two hex colors ("redmean" approximation — cheap, no color-space
+// conversion needed, and good enough to tell "these read as basically the same color" apart from
+// "these are clearly different"). Roughly 0 (identical) to ~765 (black vs white).
+function colorDistance(hexA, hexB) {
+  const a = parseInt(hexA.slice(1), 16), b = parseInt(hexB.slice(1), 16);
+  const r1 = (a >> 16) & 0xff, g1 = (a >> 8) & 0xff, b1 = a & 0xff;
+  const r2 = (b >> 16) & 0xff, g2 = (b >> 8) & 0xff, b2 = b & 0xff;
+  const rMean = (r1 + r2) / 2;
+  const dr = r1 - r2, dg = g1 - g2, db = b1 - b2;
+  return Math.sqrt((2 + rMean / 256) * dr * dr + 4 * dg * dg + (2 + (255 - rMean) / 256) * db * db);
+}
+const SIMILAR_COLOR_THRESHOLD = 70;
+
+// An entity's color is normally fixed (see ensureEntityColorMap) — this only nudges it within a
+// single overlap cluster, and only when it's actually close enough to a DIFFERENT entity present
+// in that same cluster to be visually confused. Entities that never share a moment with a
+// similar-colored entity keep their assigned color untouched everywhere.
+function resolveClusterBaseColors(entityIds) {
+  const resolved = new Map();
+  entityIds.forEach(id => {
+    const base = eventColor(id);
+    let color = base;
+    let attempt = 1;
+    while ([...resolved.values()].some(c => colorDistance(c, color) < SIMILAR_COLOR_THRESHOLD) && attempt <= 4) {
+      const step = Math.ceil(attempt / 2) * 18;
+      const sign = attempt % 2 === 1 ? -1 : 1;
+      color = shadeColor(base, sign * step);
+      attempt++;
+    }
+    resolved.set(id, color);
+  });
+  return resolved;
+}
+
 // Lays out a single day's events for the time grid: overlapping events get placed side-by-side
 // instead of stacking on top of each other and hiding all but the last one. Groups events into
 // overlap clusters, greedily assigns each a column within its cluster (standard interval-graph
@@ -178,6 +212,12 @@ function layoutDayEvents(dayEvents) {
       ev._variant = entitySeen[ev.entity_id] || 0;
       entitySeen[ev.entity_id] = ev._variant + 1;
     });
+
+    // Resolve final colors for this cluster: distinctness adjustment between different entities,
+    // then same-entity variant shading on top — computed for every event in the cluster (not just
+    // the ones that end up visibly positioned) so the overflow modal's dots match too.
+    const clusterColors = resolveClusterBaseColors([...new Set(cluster.map(ev => ev.entity_id))]);
+    cluster.forEach(ev => { ev._color = entityVariantShade(clusterColors.get(ev.entity_id), ev._variant); });
 
     const totalCols = colEnds.length;
 
@@ -393,7 +433,7 @@ async function renderCalendar() {
       const { topPx, heightPx } = topHeightPx(ev._start, ev._end);
       const leftPct  = (ev._col / ev.cols) * 100;
       const widthPct = (1 / ev.cols) * 100;
-      const color = entityVariantShade(eventColor(ev.entity_id), ev._variant);
+      const color = ev._color;
       const timeStr = `${fmt(ev._start,{hour:'numeric',minute:'2-digit'})} – ${fmt(ev._end,{hour:'numeric',minute:'2-digit'})}`;
 
       html += `<div class="cal-event"
@@ -586,7 +626,7 @@ function openOverflowModal(hiddenEvents, allEvents) {
     .sort((a, b) => a._start - b._start)
     .map(ev => {
       const timeStr = `${fmt(ev._start,{hour:'numeric',minute:'2-digit'})} – ${fmt(ev._end,{hour:'numeric',minute:'2-digit'})}`;
-      const color = entityVariantShade(eventColor(ev.entity_id), ev._variant);
+      const color = ev._color;
       return `<div class="event-list-item overflow-event-item" data-ev-id="${ev.id}">
         <span class="overflow-event-dot" style="background:${color}"></span>
         <div class="ev-info">

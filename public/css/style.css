@@ -85,7 +85,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 0;
+  padding: 8px 4px;
   margin: 12px 0;
   background: #ffffff;
   border: 1px solid #e6e6e6;
@@ -108,7 +108,7 @@ body {
   font-size: 1.25rem;
   flex-shrink: 0;
 }
-.nav-btn .nav-label { display: block; font-size: .68rem; margin-top: 4px; }
+.nav-btn .nav-label { display: block; font-size: .68rem; line-height: 1.15; }
 .nav-btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 1px 2px rgba(0,0,0,.06);
@@ -123,6 +123,28 @@ body {
 .nav-btn.active .nav-label {
   color: var(--color-surface);
 }
+
+/* Admin: pinned to the sidebar's bottom edge (auto margin overrides the nav's centering) and
+   styled as a quiet text link rather than a full nav card — it's a staff-only area, not a
+   primary destination for the students/officers most visitors are here for. */
+.nav-btn-subtle {
+  width: auto;
+  height: auto;
+  margin-top: auto;
+  margin-bottom: 16px;
+  padding: 4px 6px;
+  background: transparent;
+  border: none;
+  font-size: .68rem;
+  font-weight: 500;
+  color: var(--color-muted-2);
+  opacity: .75;
+}
+.nav-btn-subtle .icon-wrap { width: 20px; height: 20px; font-size: .9rem; }
+.nav-btn-subtle:hover { opacity: 1; box-shadow: none; transform: none; }
+.nav-btn-subtle.active { opacity: 1; background: var(--color-border-3); color: var(--coi-blue); border-radius: 8px; }
+.nav-btn-subtle.active .icon-wrap,
+.nav-btn-subtle.active .nav-label { color: var(--coi-blue); }
 
 /* Bootstrap col layout inside content-wrapper */
 #main-row {
