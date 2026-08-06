@@ -42,12 +42,17 @@ in with its own password and can create/manage its own events.
 - Click any entity tile to log in with the entity password
  - After login: create new events (title, description, location, start/end datetime)
 - Change entity password while logged in
+- Any admin-assigned password (a new entity's default password, or an admin-triggered reset) must be
+  changed before the entity can use the app further — the change-password prompt appears immediately
+  after login and can't be dismissed until a new password is set
 
 ### Admin (College of Idaho Admin)
 - Admin login (default password set via `ADMIN_PASSWORD` environment variable)
  - Create new entities (name, type, default password) — entity logos are represented by icons
 - Create events on behalf of any entity
 - Delete entities and events
+- Reset an entity's password (e.g. when its point of contact changes) — generates a fresh temporary
+  password shown once, and forces the entity to set its own on next login
 
 ### About
 - App description and usage guide

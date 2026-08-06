@@ -423,9 +423,12 @@
         <h5 class="modal-title fw-bold" id="changePwModalLabel">
           <i class="fa-solid fa-key me-2 text-warning"></i>Change Password
         </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <button type="button" class="btn-close" id="changePwModalCloseBtn" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
+        <div id="change-pw-forced-note" class="alert-inline alert alert-warning d-none mb-3">
+          This password was set by the Admin. You must choose your own password before continuing.
+        </div>
         <form id="change-pw-form">
           <div class="mb-3">
             <label class="form-label">Current Password</label>
@@ -442,6 +445,33 @@
           <div id="change-pw-msg" class="alert-inline d-none mb-2"></div>
           <button type="submit" class="btn-coi-primary w-100">Update Password</button>
         </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- RESET ENTITY PASSWORD MODAL (admin) -->
+<div class="modal fade" id="resetPwModal" tabindex="-1" aria-labelledby="resetPwModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:420px">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold" id="resetPwModalLabel">
+          <i class="fa-solid fa-key me-2 text-warning"></i>Password Reset
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-2">
+          New temporary password for <strong id="reset-pw-entity-name"></strong>. Share it securely with the
+          new contact — it won't be shown again, and they'll be required to set their own password on next login.
+        </p>
+        <div class="input-group mb-2">
+          <input type="text" class="form-control" id="reset-pw-value" readonly />
+          <button class="btn btn-outline-secondary" type="button" id="btn-copy-reset-pw" title="Copy to clipboard">
+            <i class="fa-solid fa-copy"></i>
+          </button>
+        </div>
+        <div id="reset-pw-copied-msg" class="alert-inline d-none"></div>
       </div>
     </div>
   </div>

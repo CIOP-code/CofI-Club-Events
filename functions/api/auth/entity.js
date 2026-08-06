@@ -24,7 +24,7 @@ export async function onRequestPost({ env, request }) {
 
   try {
     const entity = await env.DB.prepare(
-      `SELECT id, name, type, password_hash, salt FROM entities WHERE id = ?`
+      `SELECT id, name, type, password_hash, salt, must_change_password FROM entities WHERE id = ?`
     ).bind(entity_id).first();
 
     if (!entity) return json({ error: 'Entity not found' }, 404);
@@ -35,7 +35,15 @@ export async function onRequestPost({ env, request }) {
     const secret = env.JWT_SECRET || 'change-this-secret-in-production';
     const token = await signToken({ type: 'entity', entity_id: entity.id, entity_name: entity.name }, secret);
 
-    return json({ token, entity: { id: entity.id, name: entity.name, type: entity.type } });
+    return json({
+      token,
+      entity: {
+        id: entity.id,
+        name: entity.name,
+        type: entity.type,
+        must_change_password: !!entity.must_change_password,
+      },
+    });
   } catch (err) {
     return json({ error: err.message }, 500);
   }

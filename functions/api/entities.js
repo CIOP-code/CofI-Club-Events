@@ -13,10 +13,13 @@ function json(data, status = 200) {
   });
 }
 
-export async function onRequestGet({ env }) {
+export async function onRequestGet({ env, data }) {
+  const isAdmin = data?.user?.type === 'admin';
   try {
     const result = await env.DB.prepare(
-      `SELECT id, name, type, created_at FROM entities ORDER BY name ASC`
+      isAdmin
+        ? `SELECT id, name, type, must_change_password, created_at FROM entities ORDER BY name ASC`
+        : `SELECT id, name, type, created_at FROM entities ORDER BY name ASC`
     ).all();
     return json({ entities: result.results });
   } catch (err) {
@@ -46,8 +49,10 @@ export async function onRequestPost({ env, request, data }) {
   const password_hash = await hashPassword(password, salt);
 
   try {
+    // must_change_password is set explicitly (rather than relying on the column default) so
+    // behavior is consistent whether the table was created fresh or added via migration.
     const result = await env.DB.prepare(
-      `INSERT INTO entities (name, type, password_hash, salt) VALUES (?, ?, ?, ?)`
+      `INSERT INTO entities (name, type, password_hash, salt, must_change_password) VALUES (?, ?, ?, ?, 1)`
     ).bind(name, entityType, password_hash, salt).run();
     return json({ id: result.meta.last_row_id, message: 'Entity created' }, 201);
   } catch (err) {

@@ -12,9 +12,10 @@ const state = {
   calAnchorDate: new Date(),  // reference date for calendar view
   events: [],
   entities: [],
-  loggedInEntity: null,   // { id, name, type, token }
+  loggedInEntity: null,   // { id, name, type, token, must_change_password }
   adminToken: null,
   pendingLoginEntity: null,  // entity object waiting for password
+  forcedPasswordChange: false,  // true while the change-pw modal is a mandatory, non-dismissible flow
 };
 
 /* Ensure CSS variable for calendar header height matches the rendered size.
@@ -509,6 +510,16 @@ function onEntityLogin() {
   const banner = document.getElementById('entity-login-banner');
   document.getElementById('logged-entity-name').textContent = state.loggedInEntity.name;
   banner.classList.remove('d-none');
+
+  if (state.loggedInEntity.must_change_password) {
+    promptForcedPasswordChange();
+    return;
+  }
+
+  unlockEntityFeatures();
+}
+
+function unlockEntityFeatures() {
   document.getElementById('create-event-section').classList.remove('d-none');
   // Populate locations for entity create-event form
   (async () => {
@@ -525,6 +536,21 @@ function onEntityLogin() {
   })();
 }
 
+// Forces the entity to set a new password before the rest of the page unlocks. Used after
+// an admin-assigned password (new entity, or an admin reset) — the modal can't be dismissed
+// until a new password is set.
+function promptForcedPasswordChange() {
+  document.getElementById('cp-current').value = '';
+  document.getElementById('cp-new').value = '';
+  document.getElementById('cp-confirm').value = '';
+  hideAlert('change-pw-msg');
+  document.getElementById('change-pw-forced-note').classList.remove('d-none');
+  document.getElementById('changePwModalCloseBtn').classList.add('d-none');
+  state.forcedPasswordChange = true;
+  const modal = new bootstrap.Modal(document.getElementById('changePwModal'), { backdrop: 'static', keyboard: false });
+  modal.show();
+}
+
 document.getElementById('btn-entity-logout').addEventListener('click', () => {
   state.loggedInEntity = null;
   document.getElementById('entity-login-banner').classList.add('d-none');
@@ -536,6 +562,9 @@ document.getElementById('btn-change-pw').addEventListener('click', () => {
   document.getElementById('cp-new').value = '';
   document.getElementById('cp-confirm').value = '';
   hideAlert('change-pw-msg');
+  document.getElementById('change-pw-forced-note').classList.add('d-none');
+  document.getElementById('changePwModalCloseBtn').classList.remove('d-none');
+  state.forcedPasswordChange = false;
   new bootstrap.Modal(document.getElementById('changePwModal')).show();
 });
 
@@ -562,7 +591,17 @@ document.getElementById('change-pw-form').addEventListener('submit', async funct
 
   if (!ok) { showAlert('change-pw-msg', data.error || 'Failed to change password'); return; }
   showAlert('change-pw-msg', 'Password changed successfully!', 'success');
-  setTimeout(() => bootstrap.Modal.getInstance(document.getElementById('changePwModal')).hide(), 1500);
+
+  state.loggedInEntity.must_change_password = false;
+  const wasForced = state.forcedPasswordChange;
+
+  setTimeout(() => {
+    bootstrap.Modal.getInstance(document.getElementById('changePwModal')).hide();
+    if (wasForced) {
+      state.forcedPasswordChange = false;
+      unlockEntityFeatures();
+    }
+  }, 1500);
 });
 
 // Create event (entity user)
@@ -684,16 +723,25 @@ async function loadAdminData() {
     enList.innerHTML = entities.map(en => `
       <div class="event-list-item">
         <div class="ev-info">
-          <div class="ev-title-txt">${escHtml(en.name)} <span class="text-muted small">(${escHtml(TYPE_LABELS[en.type] || en.type)})</span></div>
+          <div class="ev-title-txt">
+            ${escHtml(en.name)} <span class="text-muted small">(${escHtml(TYPE_LABELS[en.type] || en.type)})</span>
+            ${en.must_change_password ? '<span class="badge bg-warning text-dark ms-1">Needs password change</span>' : ''}
+          </div>
           <div class="ev-meta-txt">ID: ${en.id} · Created: ${new Date(en.created_at).toLocaleDateString()}</div>
         </div>
-        <button class="btn btn-sm btn-outline-danger" data-delete-entity="${en.id}">
+        <button class="btn btn-sm btn-outline-secondary me-1" data-reset-entity="${en.id}" data-reset-entity-name="${escHtml(en.name)}" title="Reset password">
+          <i class="fa-solid fa-key"></i>
+        </button>
+        <button class="btn btn-sm btn-outline-danger" data-delete-entity="${en.id}" title="Delete entity">
           <i class="fa-solid fa-trash"></i>
         </button>
       </div>`).join('');
 
     enList.querySelectorAll('[data-delete-entity]').forEach(btn => {
       btn.addEventListener('click', () => adminDeleteEntity(parseInt(btn.dataset.deleteEntity)));
+    });
+    enList.querySelectorAll('[data-reset-entity]').forEach(btn => {
+      btn.addEventListener('click', () => adminResetEntityPassword(parseInt(btn.dataset.resetEntity), btn.dataset.resetEntityName));
     });
   } else {
     enList.innerHTML = '<p class="text-muted small">No entities yet.</p>';
@@ -802,6 +850,34 @@ async function adminDeleteEntity(id) {
   if (!ok) { alert(data.error || 'Failed to delete entity'); return; }
   loadAdminData();
 }
+
+// Reset an entity's password (e.g. when its point of contact changes). The old password stops
+// working immediately; the new temp password is shown once and the entity must set their own
+// on next login.
+async function adminResetEntityPassword(id, name) {
+  if (!confirm(`Reset the password for "${name}"? Their current password will stop working immediately, and they'll need to set a new one on next login.`)) return;
+
+  const { ok, data } = await apiFetch(`/api/entities/${id}/reset-password`, { method: 'POST' });
+  if (!ok) { alert(data.error || 'Failed to reset password'); return; }
+
+  document.getElementById('reset-pw-entity-name').textContent = data.entity.name;
+  document.getElementById('reset-pw-value').value = data.temp_password;
+  hideAlert('reset-pw-copied-msg');
+  new bootstrap.Modal(document.getElementById('resetPwModal')).show();
+  loadAdminData();
+}
+
+document.getElementById('btn-copy-reset-pw').addEventListener('click', async () => {
+  const input = document.getElementById('reset-pw-value');
+  try {
+    await navigator.clipboard.writeText(input.value);
+  } catch (e) {
+    input.select();
+    document.execCommand('copy');
+  }
+  showAlert('reset-pw-copied-msg', 'Copied to clipboard', 'success');
+  setTimeout(() => hideAlert('reset-pw-copied-msg'), 2000);
+});
 
 // Delete event
 async function adminDeleteEvent(id) {

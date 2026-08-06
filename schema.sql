@@ -3,12 +3,13 @@
 
 -- Entities table (clubs, departments, offices, and other campus organizations)
 CREATE TABLE IF NOT EXISTS entities (
-  id            INTEGER PRIMARY KEY AUTOINCREMENT,
-  name          TEXT    NOT NULL UNIQUE,
-  type          TEXT    NOT NULL DEFAULT 'club' CHECK (type IN ('club', 'department', 'office', 'organization')),
-  password_hash TEXT    NOT NULL,
-  salt          TEXT    NOT NULL,
-  created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+  id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+  name                 TEXT    NOT NULL UNIQUE,
+  type                 TEXT    NOT NULL DEFAULT 'club' CHECK (type IN ('club', 'department', 'office', 'organization')),
+  password_hash        TEXT    NOT NULL,
+  salt                 TEXT    NOT NULL,
+  must_change_password INTEGER NOT NULL DEFAULT 1,
+  created_at           DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Locations table (campus locations for events)
@@ -44,8 +45,15 @@ CREATE TABLE IF NOT EXISTS admin (
 -- - Events reference a campus location (locations table). The UI allows selecting or creating locations.
 -- - `type` categorizes entities as a student club, a college department, an office, or another
 --   organization (e.g. ASCI), so the UI can group/filter them.
+-- - `must_change_password` is set whenever an entity's password is admin-assigned (new entity, or an
+--   admin-triggered reset) and forces that entity to pick their own password before using the app further.
+--   The API always sets it explicitly on insert/reset rather than relying on the column default, so it
+--   behaves the same on both fresh and migrated databases.
 
 -- Migration from the previous "clubs are the top-level entity, run by Senate" schema:
 --   ALTER TABLE clubs RENAME TO entities;
 --   ALTER TABLE entities ADD COLUMN type TEXT NOT NULL DEFAULT 'club' CHECK (type IN ('club', 'department', 'office', 'organization'));
 --   ALTER TABLE events RENAME COLUMN club_id TO entity_id;
+
+-- Migration to add forced first-login / admin-reset password support to an already-migrated entities table:
+--   ALTER TABLE entities ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0;
