@@ -9,6 +9,10 @@ binding = "DB"
 database_name = "club-events-db-new"
 database_id = "ecf69327-715b-4fc9-97c6-36dc75a631e0"
 
+binding = "DB"
+database_name = "club-events-db-preview"
+database_id = "2fe7809f-fa14-4be0-980d-d7f3757e514d"
+
 # Store sensitive values as Wrangler secrets (never in plaintext here):
 #   wrangler pages secret put JWT_SECRET
 #   wrangler pages secret put ADMIN_PASSWORD
