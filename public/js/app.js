@@ -169,17 +169,28 @@ function isoLocal(d) {
   return formatDateTimeLocal(d) + ':00';
 }
 
+// Below 992px the shell itself switches to the mobile bottom-nav layout (matches the 991px
+// breakpoint in style.css), so a 7-column week grid has no room left to be legible there either.
+function isMobileWidth() {
+  return window.innerWidth < 992;
+}
+
+// The view actually shown: forced to 'day' below the mobile breakpoint regardless of the
+// user's last toggle choice, without overwriting that choice — so widening the window back
+// out (e.g. resize, rotate) reverts to week view on its own instead of staying stuck on 'day'.
+function effectiveCalView() {
+  return isMobileWidth() ? 'day' : state.calView;
+}
+
 async function renderCalendar() {
   const wrap = document.getElementById('cal-grid-wrap');
   const grid = document.getElementById('cal-grid');
 
   // Determine visible day range
   let days = [];
-  // Treat <768px as mobile (single-day view). Tablets and up show 7-day week view.
-  const isMobile = window.innerWidth < 768;
+  const view = effectiveCalView();
 
-  if (state.calView === 'day' || isMobile) {
-    state.calView = 'day';
+  if (view === 'day') {
     days = [startOfDay(state.calAnchorDate)];
     setViewToggleActive('day');
   } else {
@@ -373,12 +384,12 @@ function setViewToggleActive(view) {
 
 // Calendar navigation
 document.getElementById('btn-prev').addEventListener('click', () => {
-  const days = state.calView === 'week' ? 7 : 1;
+  const days = effectiveCalView() === 'week' ? 7 : 1;
   state.calAnchorDate = addDays(state.calAnchorDate, -days);
   renderCalendar();
 });
 document.getElementById('btn-next').addEventListener('click', () => {
-  const days = state.calView === 'week' ? 7 : 1;
+  const days = effectiveCalView() === 'week' ? 7 : 1;
   state.calAnchorDate = addDays(state.calAnchorDate, days);
   renderCalendar();
 });
