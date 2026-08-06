@@ -34,13 +34,15 @@
               <span class="icon-wrap"><i class="fa-solid fa-people-group"></i></span>
               Entities
             </button>
-            <button class="nav-btn" data-page="admin">
-              <span class="icon-wrap"><i class="fa-solid fa-building-columns"></i></span>
-              Admin
-            </button>
             <button class="nav-btn" data-page="about">
               <span class="icon-wrap"><i class="fa-solid fa-circle-info"></i></span>
               About
+            </button>
+            <!-- Admin is pinned to the bottom and styled subtly — it's a staff-only area, not a
+                 primary nav destination for the students/officers who make up most visitors -->
+            <button class="nav-btn nav-btn-subtle" data-page="admin">
+              <span class="icon-wrap"><i class="fa-solid fa-building-columns"></i></span>
+              Admin
             </button>
           </nav>
         </aside>
@@ -61,10 +63,15 @@
                   <div class="view-toggle ms-auto">
                     <button class="cal-nav-btn active" id="btn-view-week">Week</button>
                     <button class="cal-nav-btn" id="btn-view-day">Day</button>
+                    <button class="cal-nav-btn" id="btn-view-month">Month</button>
                   </div>
                   <!-- day headers will be rendered here so they stick with the calendar header -->
                   <div class="days-headers" id="days-headers"></div>
                 </div>
+
+                <!-- Swipeable day strip (day view only): lets you flick between days in the current
+                     week without repeated Prev/Next taps; dots show which days have events. -->
+                <div class="day-strip d-none" id="day-strip"></div>
 
                 <div class="calendar-grid" id="cal-grid">
                   <!-- Rendered by JS -->
@@ -314,29 +321,6 @@
             </div>
 
             <div class="about-section">
-              <h4><i class="fa-solid fa-server"></i> Technology Stack</h4>
-              <ul>
-                <li><strong>Frontend:</strong> HTML5, Bootstrap 5, Font Awesome, Vanilla JavaScript (SPA)</li>
-                <li><strong>Backend:</strong> Cloudflare Pages Functions (Workers)</li>
-                <li><strong>Database:</strong> Cloudflare D1 (SQLite at the edge)</li>
-                <li><strong>Storage:</strong> Not used — logos are icons and events use campus locations</li>
-                <li><strong>Entities:</strong> Clubs, departments, offices, and other campus organizations</li>
-                <li><strong>Auth:</strong> PBKDF2 password hashing + HS256 JWT tokens</li>
-              </ul>
-            </div>
-
-            <div class="about-section">
-              <h4><i class="fa-solid fa-globe"></i> Deployment</h4>
-              <p>
-                Intended domain: <strong>clubevents.collegeofidaho.edu</strong><br />
-                Temporary deployment:
-                <a href="https://club-events.pages.dev" target="_blank" rel="noopener">
-                  club-events.pages.dev
-                </a>
-              </p>
-            </div>
-
-            <div class="about-section">
               <h4><i class="fa-solid fa-code"></i> Built By</h4>
               <div class="about-builder-card">
                 <div class="avatar">RK</div>
@@ -363,8 +347,8 @@
 <nav id="bottom-nav" class="d-flex">
   <button class="bnav-btn active" data-page="home"><i class="fa-solid fa-house"></i><span>Home</span></button>
   <button class="bnav-btn" data-page="entities"><i class="fa-solid fa-people-group"></i><span>Entities</span></button>
-  <button class="bnav-btn" data-page="admin"><i class="fa-solid fa-building-columns"></i><span>Admin</span></button>
   <button class="bnav-btn" data-page="about"><i class="fa-solid fa-circle-info"></i><span>About</span></button>
+  <button class="bnav-btn" data-page="admin"><i class="fa-solid fa-building-columns"></i><span>Admin</span></button>
 </nav>
 
 <!-- ================================================================
@@ -385,6 +369,21 @@
           <span id="event-modal-time"></span>
         </div>
         <p id="event-modal-desc" class="mb-0"></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- OVERFLOW EVENTS MODAL (too many simultaneous events to show side-by-side) -->
+<div class="modal fade" id="overflowEventsModal" tabindex="-1" aria-labelledby="overflowEventsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold" id="overflowEventsModalLabel">More Events</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="overflow-events-list"></div>
       </div>
     </div>
   </div>

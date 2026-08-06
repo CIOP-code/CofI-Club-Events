@@ -85,7 +85,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 0;
+  padding: 8px 4px;
   margin: 12px 0;
   background: #ffffff;
   border: 1px solid #e6e6e6;
@@ -108,7 +108,7 @@ body {
   font-size: 1.25rem;
   flex-shrink: 0;
 }
-.nav-btn .nav-label { display: block; font-size: .68rem; margin-top: 4px; }
+.nav-btn .nav-label { display: block; font-size: .68rem; line-height: 1.15; }
 .nav-btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 1px 2px rgba(0,0,0,.06);
@@ -123,6 +123,28 @@ body {
 .nav-btn.active .nav-label {
   color: var(--color-surface);
 }
+
+/* Admin: pinned to the sidebar's bottom edge (auto margin overrides the nav's centering) and
+   styled as a quiet text link rather than a full nav card — it's a staff-only area, not a
+   primary destination for the students/officers most visitors are here for. */
+.nav-btn-subtle {
+  width: auto;
+  height: auto;
+  margin-top: auto;
+  margin-bottom: 16px;
+  padding: 4px 6px;
+  background: transparent;
+  border: none;
+  font-size: .68rem;
+  font-weight: 500;
+  color: var(--color-muted-2);
+  opacity: .75;
+}
+.nav-btn-subtle .icon-wrap { width: 20px; height: 20px; font-size: .9rem; }
+.nav-btn-subtle:hover { opacity: 1; box-shadow: none; transform: none; }
+.nav-btn-subtle.active { opacity: 1; background: var(--color-border-3); color: var(--coi-blue); border-radius: 8px; }
+.nav-btn-subtle.active .icon-wrap,
+.nav-btn-subtle.active .nav-label { color: var(--coi-blue); }
 
 /* Bootstrap col layout inside content-wrapper */
 #main-row {
@@ -353,6 +375,109 @@ body {
 }
 .hour-line.half { border-top-style: dashed; opacity: .6; }
 
+/* ===================================================
+   SWIPEABLE DAY STRIP (day view)
+   =================================================== */
+.day-strip {
+  position: sticky;
+  top: var(--calendar-header-h);
+  z-index: 210; /* below .calendar-header (220), above grid content */
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--color-border-2);
+  background: var(--color-surface);
+}
+.day-strip-pill {
+  flex: 0 0 auto;
+  width: 48px;
+  scroll-snap-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 0 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background .15s;
+}
+.day-strip-pill:hover { background: var(--coi-light); }
+.day-strip-pill .dsp-dow {
+  font-size: .64rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  letter-spacing: .03em;
+}
+.day-strip-pill .dsp-num {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--color-strong);
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+}
+.day-strip-pill.today .dsp-num { border: 1.5px solid var(--coi-blue); }
+.day-strip-pill.active { background: var(--coi-light); border-color: var(--color-border); }
+.day-strip-pill.active .dsp-num { background: var(--coi-blue); color: var(--color-surface); }
+.day-strip-pill .dsp-dots { display: flex; gap: 2px; height: 5px; }
+.day-strip-pill .dsp-dot { width: 5px; height: 5px; border-radius: 50%; }
+
+/* ===================================================
+   MONTH VIEW
+   =================================================== */
+.month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  width: 100%;
+}
+.month-dow {
+  padding: 8px 4px;
+  text-align: center;
+  font-size: .7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  letter-spacing: .04em;
+  border-bottom: 1px solid var(--color-border-2);
+}
+.month-cell {
+  min-height: 92px;
+  padding: 6px;
+  border-right: 1px solid var(--color-border-3);
+  border-bottom: 1px solid var(--color-border-3);
+  cursor: pointer;
+  transition: background .15s;
+}
+.month-cell:hover { background: var(--coi-light); }
+.month-cell.dim { color: var(--color-muted); background: var(--color-border-3); }
+.month-cell-num {
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--color-strong);
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+}
+.month-cell.dim .month-cell-num { color: var(--color-muted); }
+.month-cell.today .month-cell-num { background: var(--coi-blue); color: var(--color-surface); }
+.month-cell-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 6px;
+}
+.month-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.month-dot-more { font-size: .62rem; color: var(--color-muted); font-weight: 600; }
+
+@media (max-width: 575px) {
+  .month-cell { min-height: 56px; padding: 4px; }
+  .day-strip-pill { width: 40px; }
+}
+
 /* Current time indicator */
 .now-line {
   position: absolute;
@@ -373,8 +498,8 @@ body {
 
 /* Event blocks */
 .cal-event {
+  /* left/width are set per-event inline so overlapping events can lay out side-by-side */
   position: absolute;
-  left: 3px; right: 3px;
   border-radius: var(--event-radius);
   padding: 4px 6px;
   font-size: .72rem;
@@ -388,6 +513,22 @@ body {
 .cal-event .ev-title { font-weight: 600; }
 .cal-event .ev-entity { opacity: .85; font-size: .66rem; }
 .cal-event .ev-location { opacity: .9; font-size: .68rem; margin-top: 2px; }
+
+.cal-event-overflow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: var(--color-border-3);
+  border: 1px dashed var(--color-muted);
+  color: var(--color-muted-2);
+  font-weight: 600;
+  font-size: .68rem;
+}
+.cal-event-overflow:hover { filter: none; background: var(--coi-light); }
+
+.overflow-event-item { cursor: pointer; align-items: center; }
+.overflow-event-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 
 /* ===================================================
    ENTITIES PAGE

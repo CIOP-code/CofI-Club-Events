@@ -97,8 +97,153 @@ const PALETTE = [
   '#1565c0','#6a1b9a','#00695c','#b71c1c','#e65100',
   '#37474f','#4527a0','#2e7d32','#ad1457','#0277bd',
 ];
+
+// Assigns palette colors by each entity's position in id order, rather than `id % PALETTE.length`.
+// Entities get created and deleted over time (test entities, turnover, etc.), so ids can end up
+// spaced apart in ways that collide under a plain modulo — two different entities landing on the
+// same color. Sorting by id first keeps colors maximally distinct for however many entities exist,
+// and stable across renders/views as long as the entity list doesn't change.
+async function ensureEntityColorMap() {
+  const { ok, data } = await apiFetch('/api/entities');
+  const entities = ok ? (data.entities || []) : [];
+  const map = new Map();
+  [...entities].sort((a, b) => a.id - b.id).forEach((en, i) => map.set(en.id, PALETTE[i % PALETTE.length]));
+  return map;
+}
+
 function eventColor(entityId) {
-  return PALETTE[(entityId % PALETTE.length)];
+  return state.entityColorMap?.get(entityId) || PALETTE[entityId % PALETTE.length];
+}
+
+// Lightens (positive percent) or darkens (negative percent) a hex color — used to differentiate
+// multiple simultaneous events from the same entity without introducing a whole new color.
+function shadeColor(hex, percent) {
+  const num = parseInt(hex.slice(1), 16);
+  const clamp = v => Math.max(0, Math.min(255, v));
+  const r = clamp((num >> 16) + Math.round(2.55 * percent));
+  const g = clamp(((num >> 8) & 0xff) + Math.round(2.55 * percent));
+  const b = clamp((num & 0xff) + Math.round(2.55 * percent));
+  return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
+}
+
+// variant 0 = base color; variant 1,2,3… alternate darker/lighter in growing steps, so a few
+// simultaneous events from the same entity read as related (same hue) but distinguishable.
+function entityVariantShade(baseColor, variant) {
+  if (!variant) return baseColor;
+  const step = Math.ceil(variant / 2) * 15;
+  const sign = variant % 2 === 1 ? -1 : 1;
+  return shadeColor(baseColor, sign * step);
+}
+
+// Perceptual-ish distance between two hex colors ("redmean" approximation — cheap, no color-space
+// conversion needed, and good enough to tell "these read as basically the same color" apart from
+// "these are clearly different"). Roughly 0 (identical) to ~765 (black vs white).
+function colorDistance(hexA, hexB) {
+  const a = parseInt(hexA.slice(1), 16), b = parseInt(hexB.slice(1), 16);
+  const r1 = (a >> 16) & 0xff, g1 = (a >> 8) & 0xff, b1 = a & 0xff;
+  const r2 = (b >> 16) & 0xff, g2 = (b >> 8) & 0xff, b2 = b & 0xff;
+  const rMean = (r1 + r2) / 2;
+  const dr = r1 - r2, dg = g1 - g2, db = b1 - b2;
+  return Math.sqrt((2 + rMean / 256) * dr * dr + 4 * dg * dg + (2 + (255 - rMean) / 256) * db * db);
+}
+const SIMILAR_COLOR_THRESHOLD = 70;
+
+// An entity's color is normally fixed (see ensureEntityColorMap) — this only nudges it within a
+// single overlap cluster, and only when it's actually close enough to a DIFFERENT entity present
+// in that same cluster to be visually confused. Entities that never share a moment with a
+// similar-colored entity keep their assigned color untouched everywhere.
+function resolveClusterBaseColors(entityIds) {
+  const resolved = new Map();
+  entityIds.forEach(id => {
+    const base = eventColor(id);
+    let color = base;
+    let attempt = 1;
+    while ([...resolved.values()].some(c => colorDistance(c, color) < SIMILAR_COLOR_THRESHOLD) && attempt <= 4) {
+      const step = Math.ceil(attempt / 2) * 18;
+      const sign = attempt % 2 === 1 ? -1 : 1;
+      color = shadeColor(base, sign * step);
+      attempt++;
+    }
+    resolved.set(id, color);
+  });
+  return resolved;
+}
+
+// Lays out a single day's events for the time grid: overlapping events get placed side-by-side
+// instead of stacking on top of each other and hiding all but the last one. Groups events into
+// overlap clusters, greedily assigns each a column within its cluster (standard interval-graph
+// column packing), and caps how many columns actually render — beyond MAX_VISIBLE_COLS, the rest
+// of that cluster collapses into a single clickable "+N more" tile so a burst of 10 events at the
+// same time stays usable instead of squeezing 10 slivers into one day column.
+const MAX_VISIBLE_COLS = 4;
+
+function layoutDayEvents(dayEvents) {
+  const evs = dayEvents
+    .map(ev => ({ ...ev, _start: new Date(ev.start_datetime), _end: new Date(ev.end_datetime) }))
+    .sort((a, b) => a._start - b._start || (b._end - b._start) - (a._end - a._start));
+
+  // Group into connected overlap clusters
+  const clusters = [];
+  let current = [];
+  let clusterEnd = -Infinity;
+  evs.forEach(ev => {
+    if (current.length && ev._start.getTime() >= clusterEnd) {
+      clusters.push(current);
+      current = [];
+      clusterEnd = -Infinity;
+    }
+    current.push(ev);
+    clusterEnd = Math.max(clusterEnd, ev._end.getTime());
+  });
+  if (current.length) clusters.push(current);
+
+  const positioned = [];
+  const overflowGroups = [];
+
+  clusters.forEach(cluster => {
+    // Greedy column assignment: reuse the first column whose last event has already ended.
+    const colEnds = [];
+    const entitySeen = {};
+    cluster.forEach(ev => {
+      let col = colEnds.findIndex(t => t <= ev._start.getTime());
+      if (col === -1) { col = colEnds.length; colEnds.push(ev._end.getTime()); }
+      else { colEnds[col] = ev._end.getTime(); }
+      ev._col = col;
+      ev._variant = entitySeen[ev.entity_id] || 0;
+      entitySeen[ev.entity_id] = ev._variant + 1;
+    });
+
+    // Resolve final colors for this cluster: distinctness adjustment between different entities,
+    // then same-entity variant shading on top — computed for every event in the cluster (not just
+    // the ones that end up visibly positioned) so the overflow modal's dots match too.
+    const clusterColors = resolveClusterBaseColors([...new Set(cluster.map(ev => ev.entity_id))]);
+    cluster.forEach(ev => { ev._color = entityVariantShade(clusterColors.get(ev.entity_id), ev._variant); });
+
+    const totalCols = colEnds.length;
+
+    if (totalCols <= MAX_VISIBLE_COLS) {
+      cluster.forEach(ev => positioned.push({ ...ev, cols: totalCols }));
+      return;
+    }
+
+    const shownColCount = MAX_VISIBLE_COLS - 1;
+    const shown = cluster.filter(ev => ev._col < shownColCount);
+    const hidden = cluster.filter(ev => ev._col >= shownColCount);
+
+    shown.forEach(ev => positioned.push({ ...ev, cols: MAX_VISIBLE_COLS }));
+
+    if (hidden.length) {
+      overflowGroups.push({
+        _start: new Date(Math.min(...hidden.map(e => e._start.getTime()))),
+        _end: new Date(Math.max(...hidden.map(e => e._end.getTime()))),
+        col: shownColCount,
+        cols: MAX_VISIBLE_COLS,
+        events: hidden,
+      });
+    }
+  });
+
+  return { positioned, overflowGroups };
 }
 
 const TYPE_LABELS = {
@@ -169,23 +314,50 @@ function isoLocal(d) {
   return formatDateTimeLocal(d) + ':00';
 }
 
+// Below 992px the shell itself switches to the mobile bottom-nav layout (matches the 991px
+// breakpoint in style.css), so a 7-column week grid has no room left to be legible there either.
+function isMobileWidth() {
+  return window.innerWidth < 992;
+}
+
+// The view actually shown: 'week' is forced to 'day' below the mobile breakpoint (a 7-column
+// grid has no room there), without overwriting the stored preference — so widening the window
+// back out (e.g. resize, rotate) reverts to week view on its own. Month view's cells stay
+// legible at any width, so it's never forced.
+function effectiveCalView() {
+  if (isMobileWidth() && state.calView === 'week') return 'day';
+  return state.calView;
+}
+
 async function renderCalendar() {
   const wrap = document.getElementById('cal-grid-wrap');
   const grid = document.getElementById('cal-grid');
+  const dayStripEl = document.getElementById('day-strip');
+  const view = effectiveCalView();
+
+  if (view === 'month') {
+    dayStripEl.classList.add('d-none');
+    document.getElementById('days-headers').innerHTML = '';
+    setViewToggleActive('month');
+    await renderMonthGrid(grid);
+    return;
+  }
 
   // Determine visible day range
   let days = [];
-  // Treat <768px as mobile (single-day view). Tablets and up show 7-day week view.
-  const isMobile = window.innerWidth < 768;
+  let stripDays = null; // the week shown in the swipeable day strip (day view only)
 
-  if (state.calView === 'day' || isMobile) {
-    state.calView = 'day';
+  if (view === 'day') {
     days = [startOfDay(state.calAnchorDate)];
+    const ws = getWeekStart(state.calAnchorDate);
+    stripDays = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
     setViewToggleActive('day');
+    dayStripEl.classList.remove('d-none');
   } else {
     const ws = getWeekStart(state.calAnchorDate);
     days = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
     setViewToggleActive('week');
+    dayStripEl.classList.add('d-none');
   }
 
   // Update title
@@ -198,13 +370,18 @@ async function renderCalendar() {
     title.textContent = `${s} – ${e}`;
   }
 
-  // Fetch events for the range
-  const rangeStart = isoLocal(days[0]);
-  const rangeEnd   = isoLocal(addDays(days[days.length - 1], 1));
-  const events = await fetchEvents(rangeStart, rangeEnd);
+  // Fetch events for the range (widened to the strip's full week in day view, so the strip's
+  // dots can reflect days other than the one currently shown in the grid below)
+  const fetchDays = stripDays || days;
+  const rangeStart = isoLocal(fetchDays[0]);
+  const rangeEnd   = isoLocal(addDays(fetchDays[fetchDays.length - 1], 1));
+  const [events, entityColorMap] = await Promise.all([fetchEvents(rangeStart, rangeEnd), ensureEntityColorMap()]);
+  state.entityColorMap = entityColorMap;
 
   // Build grid HTML
   const today = startOfDay(new Date());
+  const overflowGroupsById = new Map();
+  let overflowGroupSeq = 0;
 
   let html = `<div class="time-col">`;
   // Blank top cell (aligns with day headers)
@@ -242,26 +419,45 @@ async function renderCalendar() {
       html += `<div class="now-line" style="top:${topPx}px"></div>`;
     }
 
-    // Event blocks
-    dayEvents.forEach(ev => {
-      const start = new Date(ev.start_datetime);
-      const end   = new Date(ev.end_datetime);
+    // Event blocks — overlapping events lay out side-by-side (capped) instead of stacking
+    function topHeightPx(start, end) {
       const startMin = start.getHours() * 60 + start.getMinutes();
       const endMin   = end.getHours() * 60 + end.getMinutes();
       const duration = Math.max(endMin - startMin, 15); // min 15-min visual height for readability
+      return { topPx: startMin * (HOUR_H / 60), heightPx: duration * (HOUR_H / 60) };
+    }
 
-      const topPx    = startMin * (HOUR_H / 60);
-      const heightPx = duration * (HOUR_H / 60);
-      const color = eventColor(ev.entity_id);
-      const timeStr = `${fmt(start,{hour:'numeric',minute:'2-digit'})} – ${fmt(end,{hour:'numeric',minute:'2-digit'})}`;
+    const { positioned, overflowGroups } = layoutDayEvents(dayEvents);
+
+    positioned.forEach(ev => {
+      const { topPx, heightPx } = topHeightPx(ev._start, ev._end);
+      const leftPct  = (ev._col / ev.cols) * 100;
+      const widthPct = (1 / ev.cols) * 100;
+      const color = ev._color;
+      const timeStr = `${fmt(ev._start,{hour:'numeric',minute:'2-digit'})} – ${fmt(ev._end,{hour:'numeric',minute:'2-digit'})}`;
 
       html += `<div class="cal-event"
-          style="top:${topPx}px;height:${heightPx}px;background:${color};color:#fff"
+          style="top:${topPx}px;height:${heightPx}px;left:calc(${leftPct}% + 2px);width:calc(${widthPct}% - 4px);background:${color};color:#fff"
           data-ev-id="${ev.id}"
           title="${escHtml(ev.title)} · ${escHtml(timeStr)}">
         <div class="ev-title">${escHtml(ev.title)}</div>
         <div class="ev-location">${escHtml(ev.location_name || '')}</div>
         <div class="ev-entity">${escHtml(ev.entity_name || '')}</div>
+      </div>`;
+    });
+
+    overflowGroups.forEach(grp => {
+      const { topPx, heightPx } = topHeightPx(grp._start, grp._end);
+      const leftPct  = (grp.col / grp.cols) * 100;
+      const widthPct = (1 / grp.cols) * 100;
+      const groupId = `og-${overflowGroupSeq++}`;
+      overflowGroupsById.set(groupId, grp.events);
+
+      html += `<div class="cal-event cal-event-overflow"
+          style="top:${topPx}px;height:${heightPx}px;left:calc(${leftPct}% + 2px);width:calc(${widthPct}% - 4px)"
+          data-overflow-group="${groupId}"
+          title="${grp.events.length} more events">
+        +${grp.events.length} more
       </div>`;
     });
 
@@ -292,9 +488,42 @@ async function renderCalendar() {
   }
 
   // Event block click → modal
-  grid.querySelectorAll('.cal-event').forEach(el => {
+  grid.querySelectorAll('.cal-event:not(.cal-event-overflow)').forEach(el => {
     el.addEventListener('click', () => openEventModal(el.dataset.evId, events));
   });
+
+  // Overflow tile click → list of the events collapsed into it, each opens the normal event modal
+  grid.querySelectorAll('.cal-event-overflow').forEach(el => {
+    el.addEventListener('click', () => openOverflowModal(overflowGroupsById.get(el.dataset.overflowGroup), events));
+  });
+
+  // Swipeable day strip (day view only)
+  if (stripDays) {
+    const activeDay = days[0];
+    dayStripEl.innerHTML = stripDays.map(d => {
+      const isToday = d.getTime() === today.getTime();
+      const isActive = d.getTime() === activeDay.getTime();
+      const dotEntityIds = [...new Set(
+        events.filter(ev => startOfDay(new Date(ev.start_datetime)).getTime() === d.getTime())
+              .map(ev => ev.entity_id)
+      )].slice(0, 4);
+      return `<div class="day-strip-pill${isToday ? ' today' : ''}${isActive ? ' active' : ''}" data-date="${d.toISOString()}">
+        <div class="dsp-dow">${DAYS_SHORT[d.getDay()]}</div>
+        <div class="dsp-num">${d.getDate()}</div>
+        <div class="dsp-dots">${dotEntityIds.map(id => `<span class="dsp-dot" style="background:${eventColor(id)}"></span>`).join('')}</div>
+      </div>`;
+    }).join('');
+
+    dayStripEl.querySelectorAll('.day-strip-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        state.calAnchorDate = new Date(pill.dataset.date);
+        renderCalendar();
+      });
+    });
+
+    const activePill = dayStripEl.querySelector('.day-strip-pill.active');
+    if (activePill) activePill.scrollIntoView({ inline: 'center', block: 'nearest' });
+  }
 
   // On first render, try to scroll so the current time is visible.
   // Find the vertical scroll container (closest ancestor with overflow:auto/scroll) so we scroll the correct element.
@@ -332,10 +561,89 @@ async function renderCalendar() {
   }
 }
 
+// Month view: a lightweight dot-per-event grid rather than full event blocks, which stay
+// legible at any width. Clicking a day drills into its single-day view.
+async function renderMonthGrid(grid) {
+  const monthStart = new Date(state.calAnchorDate.getFullYear(), state.calAnchorDate.getMonth(), 1);
+  const monthEnd   = new Date(state.calAnchorDate.getFullYear(), state.calAnchorDate.getMonth() + 1, 0);
+  const gridStart  = getWeekStart(monthStart);
+  const gridEnd    = addDays(getWeekStart(monthEnd), 6); // Saturday of the week containing the last day
+  const totalDays  = Math.round((gridEnd - gridStart) / 86400000) + 1;
+  const cells = Array.from({ length: totalDays }, (_, i) => addDays(gridStart, i));
+
+  document.getElementById('cal-title').textContent = fmt(monthStart, { month: 'long', year: 'numeric' });
+
+  const [events, entityColorMap] = await Promise.all([
+    fetchEvents(isoLocal(gridStart), isoLocal(addDays(gridEnd, 1))),
+    ensureEntityColorMap(),
+  ]);
+  state.entityColorMap = entityColorMap;
+  const today = startOfDay(new Date());
+  const MAX_DOTS = 3;
+
+  let html = `<div class="month-grid">`;
+  DAYS_SHORT.forEach(d => { html += `<div class="month-dow">${d}</div>`; });
+  cells.forEach(day => {
+    const inMonth = day.getMonth() === monthStart.getMonth();
+    const isToday = day.getTime() === today.getTime();
+    const dayEvents = events.filter(ev => startOfDay(new Date(ev.start_datetime)).getTime() === day.getTime());
+    const shown = dayEvents.slice(0, MAX_DOTS);
+    const overflow = dayEvents.length - shown.length;
+
+    html += `<div class="month-cell${inMonth ? '' : ' dim'}${isToday ? ' today' : ''}" data-date="${day.toISOString()}">
+      <div class="month-cell-num">${day.getDate()}</div>
+      <div class="month-cell-dots">
+        ${shown.map(ev => `<span class="month-dot" style="background:${eventColor(ev.entity_id)}" title="${escHtml(ev.title)}"></span>`).join('')}
+        ${overflow > 0 ? `<span class="month-dot-more">+${overflow}</span>` : ''}
+      </div>
+    </div>`;
+  });
+  html += `</div>`;
+
+  grid.innerHTML = html;
+
+  grid.querySelectorAll('.month-cell').forEach(cell => {
+    cell.addEventListener('click', () => {
+      state.calAnchorDate = new Date(cell.dataset.date);
+      state.calView = 'day';
+      renderCalendar();
+    });
+  });
+}
+
 function escHtml(str) {
   return String(str || '')
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// Lists the events collapsed into an overflow tile; clicking one opens the normal event modal.
+function openOverflowModal(hiddenEvents, allEvents) {
+  if (!hiddenEvents || !hiddenEvents.length) return;
+  const list = document.getElementById('overflow-events-list');
+  list.innerHTML = hiddenEvents
+    .slice()
+    .sort((a, b) => a._start - b._start)
+    .map(ev => {
+      const timeStr = `${fmt(ev._start,{hour:'numeric',minute:'2-digit'})} – ${fmt(ev._end,{hour:'numeric',minute:'2-digit'})}`;
+      const color = ev._color;
+      return `<div class="event-list-item overflow-event-item" data-ev-id="${ev.id}">
+        <span class="overflow-event-dot" style="background:${color}"></span>
+        <div class="ev-info">
+          <div class="ev-title-txt">${escHtml(ev.title)}</div>
+          <div class="ev-meta-txt">${escHtml(ev.entity_name || '')} · ${escHtml(timeStr)}</div>
+        </div>
+      </div>`;
+    }).join('');
+
+  list.querySelectorAll('.overflow-event-item').forEach(el => {
+    el.addEventListener('click', () => {
+      bootstrap.Modal.getInstance(document.getElementById('overflowEventsModal'))?.hide();
+      openEventModal(el.dataset.evId, allEvents);
+    });
+  });
+
+  new bootstrap.Modal(document.getElementById('overflowEventsModal')).show();
 }
 
 function openEventModal(evId, events) {
@@ -369,17 +677,26 @@ function openEventModal(evId, events) {
 function setViewToggleActive(view) {
   document.getElementById('btn-view-week').classList.toggle('active', view === 'week');
   document.getElementById('btn-view-day').classList.toggle('active', view === 'day');
+  document.getElementById('btn-view-month').classList.toggle('active', view === 'month');
 }
 
 // Calendar navigation
 document.getElementById('btn-prev').addEventListener('click', () => {
-  const days = state.calView === 'week' ? 7 : 1;
-  state.calAnchorDate = addDays(state.calAnchorDate, -days);
+  const view = effectiveCalView();
+  if (view === 'month') {
+    state.calAnchorDate = new Date(state.calAnchorDate.getFullYear(), state.calAnchorDate.getMonth() - 1, 1);
+  } else {
+    state.calAnchorDate = addDays(state.calAnchorDate, view === 'week' ? -7 : -1);
+  }
   renderCalendar();
 });
 document.getElementById('btn-next').addEventListener('click', () => {
-  const days = state.calView === 'week' ? 7 : 1;
-  state.calAnchorDate = addDays(state.calAnchorDate, days);
+  const view = effectiveCalView();
+  if (view === 'month') {
+    state.calAnchorDate = new Date(state.calAnchorDate.getFullYear(), state.calAnchorDate.getMonth() + 1, 1);
+  } else {
+    state.calAnchorDate = addDays(state.calAnchorDate, view === 'week' ? 7 : 1);
+  }
   renderCalendar();
 });
 document.getElementById('btn-today').addEventListener('click', () => {
@@ -392,6 +709,10 @@ document.getElementById('btn-view-week').addEventListener('click', () => {
 });
 document.getElementById('btn-view-day').addEventListener('click', () => {
   state.calView = 'day';
+  renderCalendar();
+});
+document.getElementById('btn-view-month').addEventListener('click', () => {
+  state.calView = 'month';
   renderCalendar();
 });
 
