@@ -127,5 +127,7 @@ The admin account is bootstrapped automatically on first login.
 wrangler pages dev public --d1=DB
 ```
 
+Preview deployments (from PRs/branches) use a separate `club-events-db-preview` D1 database from production, configured via `[env.preview]` in `wrangler.toml`.
+
 ---
 Built by [Rabin Kalikote](https://rabinkalikote.com)
