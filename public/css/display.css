@@ -1,0 +1,179 @@
+/* ===================================================
+   Campus Events – College of Idaho  |  display.css
+   Standalone kiosk/TV view — deliberately independent of style.css
+   (no shared chrome, no CDN dependencies) so it stays light and reliable
+   on a screen that's meant to run unattended for long stretches.
+   =================================================== */
+
+:root {
+  --coi-blue:  #533860;
+  --coi-gold:  #FFE432;
+  --bg:        #f4f2f6;
+  --surface:   #ffffff;
+  --border:    #e3dfe8;
+  --text:      #201a26;
+  --muted:     #786f85;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  overflow: hidden; /* a kiosk display should never need to scroll */
+}
+
+#kiosk {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 28px 36px;
+}
+
+header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  flex-shrink: 0;
+}
+header h1 {
+  margin: 0;
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: var(--coi-blue);
+}
+header .clock {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+#days {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(var(--day-count, 3), 1fr);
+  gap: 24px;
+  min-height: 0;
+}
+
+.day-col {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  box-shadow: 0 2px 10px rgba(83,56,96,.06);
+}
+.day-col.is-today { border: 2px solid var(--coi-blue); }
+
+.day-col h2 {
+  margin: 0 0 4px;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--coi-blue);
+}
+.day-col .day-sub {
+  margin: 0 0 16px;
+  font-size: 1.05rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+.day-col.is-today .day-sub::before {
+  content: 'TODAY';
+  background: var(--coi-blue);
+  color: #fff;
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  border-radius: 5px;
+  padding: 2px 7px;
+  margin-right: 8px;
+}
+
+.event-list {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.event-row {
+  display: flex;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.event-row:last-child { border-bottom: none; }
+
+.event-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+
+.event-info { min-width: 0; }
+.event-time {
+  font-size: .92rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+.event-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 1px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.event-meta {
+  font-size: .88rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.day-empty {
+  color: var(--muted);
+  font-size: 1.05rem;
+  font-style: italic;
+  padding: 12px 0;
+}
+
+.day-overflow {
+  color: var(--muted);
+  font-size: .92rem;
+  font-weight: 600;
+  padding-top: 4px;
+}
+
+#kiosk-error {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  background: #b71c1c;
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: .85rem;
+  display: none;
+}
+
+@media (max-width: 900px) {
+  /* The fixed-height, non-scrolling layout is tuned for a landscape TV; on a narrow window
+     stacking every day in one column can exceed the viewport, so allow scrolling here only. */
+  html, body { overflow: auto; }
+  #kiosk { height: auto; min-height: 100vh; }
+  #days { grid-template-columns: 1fr; }
+  header h1 { font-size: 1.6rem; }
+}
