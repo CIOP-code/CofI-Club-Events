@@ -1,5 +1,5 @@
 /**
- * POST /api/auth/admin  – login as admin
+ * POST /api/auth/admin  – login as the College of Idaho Admin
  * Body: { password }
  * Returns: { token }
  *

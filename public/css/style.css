@@ -1,5 +1,5 @@
 /* ===================================================
-   Club Events – College of Idaho  |  style.css
+   Campus Events – College of Idaho  |  style.css
    =================================================== */
 
 /* ---- Variables ---- */
@@ -386,20 +386,20 @@ body {
 }
 .cal-event:hover { filter: brightness(1.08); transform: scale(1.01); }
 .cal-event .ev-title { font-weight: 600; }
-.cal-event .ev-club  { opacity: .85; font-size: .66rem; }
+.cal-event .ev-entity { opacity: .85; font-size: .66rem; }
 .cal-event .ev-location { opacity: .9; font-size: .68rem; margin-top: 2px; }
 
 /* ===================================================
-   CLUBS PAGE
+   ENTITIES PAGE
    =================================================== */
-.clubs-filter {
+.entities-filter {
   display: flex;
   gap: 10px;
   align-items: center;
   padding: 0 16px;
   margin-bottom: 16px;
 }
-.clubs-filter input {
+.entities-filter input {
   border-radius: 8px;
   border: 1px solid var(--color-border);
   padding: 8px 14px;
@@ -408,20 +408,20 @@ body {
   outline: none;
   transition: border-color .15s;
 }
-.clubs-filter input:focus { border-color: var(--coi-blue); }
-.clubs-filter .result-count {
+.entities-filter input:focus { border-color: var(--coi-blue); }
+.entities-filter .result-count {
   font-size: .82rem;
   color: var(--color-muted);
 }
 
-.clubs-grid {
+.entities-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 14px;
   padding: 0 16px;
 }
 
-.club-tile {
+.entity-tile {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 12px;
@@ -432,12 +432,13 @@ body {
   cursor: pointer;
   transition: box-shadow .2s, transform .15s;
   text-align: center;
+  position: relative;
 }
-.club-tile:hover {
+.entity-tile:hover {
   box-shadow: 0 1px 2px rgba(0,48,135,.12);
   transform: translateY(-1px);
 }
-.club-tile img {
+.entity-tile img {
   width: 64px;
   height: 64px;
   object-fit: contain;
@@ -445,7 +446,7 @@ body {
   background: var(--coi-light);
   margin-bottom: 10px;
 }
-.club-tile .club-logo-placeholder {
+.entity-tile .entity-logo-placeholder {
   width: 64px;
   height: 64px;
   border-radius: 10px;
@@ -458,15 +459,28 @@ body {
   font-weight: 700;
   margin-bottom: 10px;
 }
-.club-tile .club-name {
+.entity-tile .entity-name {
   font-size: .82rem;
   font-weight: 600;
   color: var(--color-strong);
   line-height: 1.3;
 }
+.entity-tile .entity-type-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  font-size: .62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .02em;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: var(--coi-light);
+  color: var(--coi-blue);
+}
 
-/* Logged-in club banner */
-.club-logged-in-banner {
+/* Logged-in entity banner */
+.entity-logged-in-banner {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -477,7 +491,7 @@ body {
   margin-bottom: 16px;
   font-size: .9rem;
 }
-.club-logged-in-banner .club-badge {
+.entity-logged-in-banner .entity-badge {
   background: var(--coi-blue);
   color: var(--color-surface);
   border-radius: 6px;
@@ -508,9 +522,9 @@ body {
 }
 
 /* ===================================================
-   SENATE PAGE
+   ADMIN PAGE
    =================================================== */
-.senate-login-card {
+.admin-login-card {
   max-width: 420px;
   margin: 40px auto;
   background: var(--color-surface);
@@ -519,35 +533,35 @@ body {
   box-shadow: 0 4px 24px rgba(0,48,135,.1);
   text-align: center;
 }
-.senate-login-card .icon-lock {
+.admin-login-card .icon-lock {
   font-size: 2.8rem;
   color: var(--coi-blue);
   margin-bottom: 12px;
 }
-.senate-login-card h3 {
+.admin-login-card h3 {
   font-weight: 700;
   margin-bottom: 6px;
   color: var(--color-strong);
 }
-.senate-login-card p {
+.admin-login-card p {
   color: var(--color-muted-2);
   font-size: .88rem;
   margin-bottom: 20px;
 }
 
-.senate-panel h4 {
+.admin-panel h4 {
   font-weight: 700;
   color: var(--coi-blue);
   margin-bottom: 4px;
 }
-.senate-panel .section-card {
+.admin-panel .section-card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 14px;
   padding: 22px;
   margin-bottom: 20px;
 }
-#senate-actions{
+#admin-actions{
   margin-left: 0px;
   margin-right: 0px;
 }
@@ -675,7 +689,7 @@ body {
   margin-top: 10px;
 }
 
-/* Events list in senate / manage panel */
+/* Events list in admin / manage panel */
 .event-list-item {
   display: flex;
   align-items: flex-start;
@@ -696,7 +710,7 @@ body {
   #content-wrapper { height: 87vh;}
   #bottom-nav { display: flex; }
 
-  .clubs-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+  .entities-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
   /* Hide the calendar title on smaller screens to save horizontal space */
   .calendar-header h2 { font-size: .88rem; }
 }
@@ -707,9 +721,9 @@ body {
 }
 
 @media (max-width: 575px) {
-  .clubs-grid { grid-template-columns: repeat(2, 1fr); }
+  .entities-grid { grid-template-columns: repeat(2, 1fr); }
   .day-col { min-width: 80px; }
-  .clubs-filter input { width: 100%; }
+  .entities-filter input { width: 100%; }
   /* Hide calendar title only on small phones */
   #cal-title { display: none !important; }
 }

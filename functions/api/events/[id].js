@@ -1,7 +1,7 @@
 /**
  * GET    /api/events/:id  – get a single event
- * PUT    /api/events/:id  – update an event (requires owner club or admin)
- * DELETE /api/events/:id  – delete an event (requires owner club or admin)
+ * PUT    /api/events/:id  – update an event (requires owner entity or admin)
+ * DELETE /api/events/:id  – delete an event (requires owner entity or admin)
  */
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -14,9 +14,9 @@ export async function onRequestGet({ env, params }) {
   const { id } = params;
   try {
     const event = await env.DB.prepare(
-      `SELECT e.*, c.name AS club_name, l.name AS location_name
+      `SELECT e.*, en.name AS entity_name, en.type AS entity_type, l.name AS location_name
        FROM events e
-       JOIN clubs c ON e.club_id = c.id
+       JOIN entities en ON e.entity_id = en.id
        LEFT JOIN locations l ON e.location_id = l.id
        WHERE e.id = ?`
     ).bind(id).first();
@@ -35,7 +35,7 @@ export async function onRequestPut({ env, request, params, data }) {
   const event = await env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(id).first();
   if (!event) return json({ error: 'Event not found' }, 404);
 
-  if (user.type === 'club' && user.club_id !== event.club_id) {
+  if (user.type === 'entity' && user.entity_id !== event.entity_id) {
     return json({ error: 'Forbidden' }, 403);
   }
 
@@ -68,7 +68,7 @@ export async function onRequestDelete({ env, params, data }) {
   const event = await env.DB.prepare('SELECT * FROM events WHERE id = ?').bind(id).first();
   if (!event) return json({ error: 'Event not found' }, 404);
 
-  if (user.type === 'club' && user.club_id !== event.club_id) {
+  if (user.type === 'entity' && user.entity_id !== event.entity_id) {
     return json({ error: 'Forbidden' }, 403);
   }
 
