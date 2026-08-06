@@ -175,28 +175,44 @@ function isMobileWidth() {
   return window.innerWidth < 992;
 }
 
-// The view actually shown: forced to 'day' below the mobile breakpoint regardless of the
-// user's last toggle choice, without overwriting that choice — so widening the window back
-// out (e.g. resize, rotate) reverts to week view on its own instead of staying stuck on 'day'.
+// The view actually shown: 'week' is forced to 'day' below the mobile breakpoint (a 7-column
+// grid has no room there), without overwriting the stored preference — so widening the window
+// back out (e.g. resize, rotate) reverts to week view on its own. Month view's cells stay
+// legible at any width, so it's never forced.
 function effectiveCalView() {
-  return isMobileWidth() ? 'day' : state.calView;
+  if (isMobileWidth() && state.calView === 'week') return 'day';
+  return state.calView;
 }
 
 async function renderCalendar() {
   const wrap = document.getElementById('cal-grid-wrap');
   const grid = document.getElementById('cal-grid');
+  const dayStripEl = document.getElementById('day-strip');
+  const view = effectiveCalView();
+
+  if (view === 'month') {
+    dayStripEl.classList.add('d-none');
+    document.getElementById('days-headers').innerHTML = '';
+    setViewToggleActive('month');
+    await renderMonthGrid(grid);
+    return;
+  }
 
   // Determine visible day range
   let days = [];
-  const view = effectiveCalView();
+  let stripDays = null; // the week shown in the swipeable day strip (day view only)
 
   if (view === 'day') {
     days = [startOfDay(state.calAnchorDate)];
+    const ws = getWeekStart(state.calAnchorDate);
+    stripDays = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
     setViewToggleActive('day');
+    dayStripEl.classList.remove('d-none');
   } else {
     const ws = getWeekStart(state.calAnchorDate);
     days = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
     setViewToggleActive('week');
+    dayStripEl.classList.add('d-none');
   }
 
   // Update title
@@ -209,9 +225,11 @@ async function renderCalendar() {
     title.textContent = `${s} – ${e}`;
   }
 
-  // Fetch events for the range
-  const rangeStart = isoLocal(days[0]);
-  const rangeEnd   = isoLocal(addDays(days[days.length - 1], 1));
+  // Fetch events for the range (widened to the strip's full week in day view, so the strip's
+  // dots can reflect days other than the one currently shown in the grid below)
+  const fetchDays = stripDays || days;
+  const rangeStart = isoLocal(fetchDays[0]);
+  const rangeEnd   = isoLocal(addDays(fetchDays[fetchDays.length - 1], 1));
   const events = await fetchEvents(rangeStart, rangeEnd);
 
   // Build grid HTML
@@ -307,6 +325,34 @@ async function renderCalendar() {
     el.addEventListener('click', () => openEventModal(el.dataset.evId, events));
   });
 
+  // Swipeable day strip (day view only)
+  if (stripDays) {
+    const activeDay = days[0];
+    dayStripEl.innerHTML = stripDays.map(d => {
+      const isToday = d.getTime() === today.getTime();
+      const isActive = d.getTime() === activeDay.getTime();
+      const dotEntityIds = [...new Set(
+        events.filter(ev => startOfDay(new Date(ev.start_datetime)).getTime() === d.getTime())
+              .map(ev => ev.entity_id)
+      )].slice(0, 4);
+      return `<div class="day-strip-pill${isToday ? ' today' : ''}${isActive ? ' active' : ''}" data-date="${d.toISOString()}">
+        <div class="dsp-dow">${DAYS_SHORT[d.getDay()]}</div>
+        <div class="dsp-num">${d.getDate()}</div>
+        <div class="dsp-dots">${dotEntityIds.map(id => `<span class="dsp-dot" style="background:${eventColor(id)}"></span>`).join('')}</div>
+      </div>`;
+    }).join('');
+
+    dayStripEl.querySelectorAll('.day-strip-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        state.calAnchorDate = new Date(pill.dataset.date);
+        renderCalendar();
+      });
+    });
+
+    const activePill = dayStripEl.querySelector('.day-strip-pill.active');
+    if (activePill) activePill.scrollIntoView({ inline: 'center', block: 'nearest' });
+  }
+
   // On first render, try to scroll so the current time is visible.
   // Find the vertical scroll container (closest ancestor with overflow:auto/scroll) so we scroll the correct element.
   function findVerticalScrollContainer(el) {
@@ -341,6 +387,52 @@ async function renderCalendar() {
     }
     state._hasScrolledToNow = true;
   }
+}
+
+// Month view: a lightweight dot-per-event grid rather than full event blocks, which stay
+// legible at any width. Clicking a day drills into its single-day view.
+async function renderMonthGrid(grid) {
+  const monthStart = new Date(state.calAnchorDate.getFullYear(), state.calAnchorDate.getMonth(), 1);
+  const monthEnd   = new Date(state.calAnchorDate.getFullYear(), state.calAnchorDate.getMonth() + 1, 0);
+  const gridStart  = getWeekStart(monthStart);
+  const gridEnd    = addDays(getWeekStart(monthEnd), 6); // Saturday of the week containing the last day
+  const totalDays  = Math.round((gridEnd - gridStart) / 86400000) + 1;
+  const cells = Array.from({ length: totalDays }, (_, i) => addDays(gridStart, i));
+
+  document.getElementById('cal-title').textContent = fmt(monthStart, { month: 'long', year: 'numeric' });
+
+  const events = await fetchEvents(isoLocal(gridStart), isoLocal(addDays(gridEnd, 1)));
+  const today = startOfDay(new Date());
+  const MAX_DOTS = 3;
+
+  let html = `<div class="month-grid">`;
+  DAYS_SHORT.forEach(d => { html += `<div class="month-dow">${d}</div>`; });
+  cells.forEach(day => {
+    const inMonth = day.getMonth() === monthStart.getMonth();
+    const isToday = day.getTime() === today.getTime();
+    const dayEvents = events.filter(ev => startOfDay(new Date(ev.start_datetime)).getTime() === day.getTime());
+    const shown = dayEvents.slice(0, MAX_DOTS);
+    const overflow = dayEvents.length - shown.length;
+
+    html += `<div class="month-cell${inMonth ? '' : ' dim'}${isToday ? ' today' : ''}" data-date="${day.toISOString()}">
+      <div class="month-cell-num">${day.getDate()}</div>
+      <div class="month-cell-dots">
+        ${shown.map(ev => `<span class="month-dot" style="background:${eventColor(ev.entity_id)}" title="${escHtml(ev.title)}"></span>`).join('')}
+        ${overflow > 0 ? `<span class="month-dot-more">+${overflow}</span>` : ''}
+      </div>
+    </div>`;
+  });
+  html += `</div>`;
+
+  grid.innerHTML = html;
+
+  grid.querySelectorAll('.month-cell').forEach(cell => {
+    cell.addEventListener('click', () => {
+      state.calAnchorDate = new Date(cell.dataset.date);
+      state.calView = 'day';
+      renderCalendar();
+    });
+  });
 }
 
 function escHtml(str) {
@@ -380,17 +472,26 @@ function openEventModal(evId, events) {
 function setViewToggleActive(view) {
   document.getElementById('btn-view-week').classList.toggle('active', view === 'week');
   document.getElementById('btn-view-day').classList.toggle('active', view === 'day');
+  document.getElementById('btn-view-month').classList.toggle('active', view === 'month');
 }
 
 // Calendar navigation
 document.getElementById('btn-prev').addEventListener('click', () => {
-  const days = effectiveCalView() === 'week' ? 7 : 1;
-  state.calAnchorDate = addDays(state.calAnchorDate, -days);
+  const view = effectiveCalView();
+  if (view === 'month') {
+    state.calAnchorDate = new Date(state.calAnchorDate.getFullYear(), state.calAnchorDate.getMonth() - 1, 1);
+  } else {
+    state.calAnchorDate = addDays(state.calAnchorDate, view === 'week' ? -7 : -1);
+  }
   renderCalendar();
 });
 document.getElementById('btn-next').addEventListener('click', () => {
-  const days = effectiveCalView() === 'week' ? 7 : 1;
-  state.calAnchorDate = addDays(state.calAnchorDate, days);
+  const view = effectiveCalView();
+  if (view === 'month') {
+    state.calAnchorDate = new Date(state.calAnchorDate.getFullYear(), state.calAnchorDate.getMonth() + 1, 1);
+  } else {
+    state.calAnchorDate = addDays(state.calAnchorDate, view === 'week' ? 7 : 1);
+  }
   renderCalendar();
 });
 document.getElementById('btn-today').addEventListener('click', () => {
@@ -403,6 +504,10 @@ document.getElementById('btn-view-week').addEventListener('click', () => {
 });
 document.getElementById('btn-view-day').addEventListener('click', () => {
   state.calView = 'day';
+  renderCalendar();
+});
+document.getElementById('btn-view-month').addEventListener('click', () => {
+  state.calView = 'month';
   renderCalendar();
 });
 

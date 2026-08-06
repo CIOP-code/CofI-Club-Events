@@ -61,10 +61,15 @@
                   <div class="view-toggle ms-auto">
                     <button class="cal-nav-btn active" id="btn-view-week">Week</button>
                     <button class="cal-nav-btn" id="btn-view-day">Day</button>
+                    <button class="cal-nav-btn" id="btn-view-month">Month</button>
                   </div>
                   <!-- day headers will be rendered here so they stick with the calendar header -->
                   <div class="days-headers" id="days-headers"></div>
                 </div>
+
+                <!-- Swipeable day strip (day view only): lets you flick between days in the current
+                     week without repeated Prev/Next taps; dots show which days have events. -->
+                <div class="day-strip d-none" id="day-strip"></div>
 
                 <div class="calendar-grid" id="cal-grid">
                   <!-- Rendered by JS -->
