@@ -66,13 +66,25 @@ body {
   height: 100%;
 }
 
+.sidebar-logo {
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 24px 0 4px;
+}
+.sidebar-logo img {
+  width: 52px;
+  height: auto;
+}
+
 /* Sidebar nav container */
 #sidebar nav {
   display: flex;
   flex-direction: column;
   align-items: flex-end; /* right align buttons */
   justify-content: center; /* center vertically */
-  height: 100%;
+  flex: 1; /* fill the space left by .sidebar-logo, rather than height:100% which would overlap it */
+  min-height: 0;
   padding-right: 12px;
 }
 
