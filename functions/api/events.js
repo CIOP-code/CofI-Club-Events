@@ -2,6 +2,8 @@
  * GET  /api/events?start=&end=   – list events (with optional date range filter)
  * POST /api/events                – create a new event (requires entity or admin auth)
  */
+import { findLocationConflict, locationConflictMessage } from '../utils/scheduling.js';
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -65,6 +67,9 @@ export async function onRequestPost({ env, request, data }) {
   }
 
   try {
+    const conflict = await findLocationConflict(env, { location_id: location_id || null, start_datetime, end_datetime });
+    if (conflict) return json({ error: locationConflictMessage(conflict) }, 409);
+
     const result = await env.DB.prepare(
       `INSERT INTO events (title, description, location_id, start_datetime, end_datetime, entity_id)
        VALUES (?, ?, ?, ?, ?, ?)`

@@ -3,6 +3,8 @@
  * PUT    /api/events/:id  – update an event (requires owner entity or admin)
  * DELETE /api/events/:id  – delete an event (requires owner entity or admin)
  */
+import { findLocationConflict, locationConflictMessage } from '../../utils/scheduling.js';
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -43,15 +45,27 @@ export async function onRequestPut({ env, request, params, data }) {
   try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
 
   const { title, description, location_id, start_datetime, end_datetime } = body;
+  const nextLocationId = location_id ?? event.location_id;
+  const nextStart = start_datetime ?? event.start_datetime;
+  const nextEnd = end_datetime ?? event.end_datetime;
+
   try {
+    const conflict = await findLocationConflict(env, {
+      location_id: nextLocationId,
+      start_datetime: nextStart,
+      end_datetime: nextEnd,
+      excludeEventId: id,
+    });
+    if (conflict) return json({ error: locationConflictMessage(conflict) }, 409);
+
     await env.DB.prepare(
       `UPDATE events SET title=?, description=?, location_id=?, start_datetime=?, end_datetime=? WHERE id = ?`
     ).bind(
       title ?? event.title,
       description ?? event.description,
-      location_id ?? event.location_id,
-      start_datetime ?? event.start_datetime,
-      end_datetime ?? event.end_datetime,
+      nextLocationId,
+      nextStart,
+      nextEnd,
       id
     ).run();
     return json({ message: 'Event updated' });
