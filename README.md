@@ -111,6 +111,10 @@ You can pre-populate the `locations` table via the D1 console or by using the `/
 wrangler pages secret put JWT_SECRET
 wrangler pages secret put ADMIN_PASSWORD
 ```
+This sets them for **Production only**. Preview deployments (PRs/branches) are a separate
+Cloudflare Pages environment with a separate secret store — set the same two secrets for Preview
+too, in the dashboard under Pages project → Settings → Environment variables → Preview tab, or
+every preview deployment's login will fail with "Server misconfigured: JWT_SECRET is not set".
 
 ### 4. Deploy
 ```bash

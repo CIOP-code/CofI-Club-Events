@@ -143,6 +143,14 @@ Preview deployments (from PRs/branches) use a separate D1 database (`club-events
 production, configured via `[env.preview]` in `wrangler.toml` — testing in a PR preview cannot
 pollute or leak real production data.
 
+This isolation extends to secrets, not just the database: `JWT_SECRET` and `ADMIN_PASSWORD` set
+for Production in the Cloudflare dashboard do **not** apply to Preview deployments — Cloudflare
+Pages treats them as separate environments with separate secret stores. Both need to be set for
+Preview too (Pages project → Settings → Environment variables → Preview tab), or preview logins
+fail outright with "Server misconfigured: JWT_SECRET is not set" (see `functions/utils/env.js`) —
+which is exactly the deliberate fail-closed behavior this hardening pass added, working as
+intended rather than indicating data loss.
+
 ## Known limitations & accepted trade-offs
 
 Being upfront about what this does *not* do, and why:
