@@ -195,6 +195,20 @@
                 </button>
               </div>
 
+              <ul class="nav nav-pills admin-subnav px-2" id="admin-subnav">
+                <li class="nav-item">
+                  <button type="button" class="nav-link active" data-admin-section="dashboard">
+                    <i class="fa-solid fa-gauge me-1"></i>Dashboard
+                  </button>
+                </li>
+                <li class="nav-item">
+                  <button type="button" class="nav-link" data-admin-section="roadmap">
+                    <i class="fa-solid fa-map me-1"></i>Roadmap
+                  </button>
+                </li>
+              </ul>
+
+              <div id="admin-section-dashboard" class="admin-section">
               <div id="admin-actions" class="row g-3 px-2">
                 <!-- Create Entity -->
                 <div class="col-12 col-md-6">
@@ -287,6 +301,11 @@
                     <div id="admin-events-list">Loading…</div>
                   </div>
                 </div>
+              </div>
+              </div><!-- /admin-section-dashboard -->
+
+              <div id="admin-section-roadmap" class="admin-section d-none px-2">
+                <!-- Populated by renderAdminRoadmap() in app.js -->
               </div>
             </div>
 
