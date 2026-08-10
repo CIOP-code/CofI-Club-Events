@@ -18,6 +18,8 @@
 </head>
 <body>
 
+<a href="#content-wrapper" class="skip-link">Skip to content</a>
+
 <div id="app">
 
   <div class="container-fluid px-3 py-2">
@@ -52,7 +54,7 @@
       </div>
       
       <div class="col-12 col-lg-8 col-xl-8 py-3">
-        <main id="content-wrapper">
+        <main id="content-wrapper" tabindex="-1">
           <!-- ======================================================
                HOME PAGE – Calendar
                ====================================================== -->
@@ -68,6 +70,9 @@
                     <button class="cal-nav-btn" id="btn-view-day">Day</button>
                     <button class="cal-nav-btn" id="btn-view-month">Month</button>
                   </div>
+                  <button class="cal-nav-btn" id="btn-event-search" title="Search events">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                  </button>
                   <!-- day headers will be rendered here so they stick with the calendar header -->
                   <div class="days-headers" id="days-headers"></div>
                 </div>
@@ -392,7 +397,35 @@
           <span id="event-modal-entity-badge" class="badge bg-primary me-2"></span>
           <span id="event-modal-time"></span>
         </div>
-        <p id="event-modal-desc" class="mb-0"></p>
+        <p id="event-modal-desc" class="mb-3"></p>
+        <div class="d-flex flex-wrap gap-2">
+          <a id="event-modal-ics-link" href="#" class="btn btn-sm btn-outline-secondary" download>
+            <i class="fa-solid fa-calendar-plus me-1"></i>Add to Calendar
+          </a>
+          <button type="button" class="btn btn-sm btn-outline-secondary" id="event-modal-copy-link">
+            <i class="fa-solid fa-link me-1"></i>Copy Link
+          </button>
+        </div>
+        <div id="event-modal-copied-msg" class="alert-inline d-none mt-2"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Event Search Modal -->
+<div class="modal fade" id="eventSearchModal" tabindex="-1" aria-labelledby="eventSearchModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold" id="eventSearchModalLabel">
+          <i class="fa-solid fa-magnifying-glass me-2"></i>Search Events
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="text" class="form-control mb-3" id="event-search-input"
+               placeholder="Search by event title, description, or entity…" autocomplete="off" />
+        <div id="event-search-results"></div>
       </div>
     </div>
   </div>
