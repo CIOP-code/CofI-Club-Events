@@ -44,8 +44,10 @@ export async function onRequestPut({ env, request, params, data }) {
   let body;
   try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
 
-  const { title, description, location_id, start_datetime, end_datetime } = body;
-  const nextLocationId = location_id ?? event.location_id;
+  const { title, description, start_datetime, end_datetime } = body;
+  // location_id is nullable (an event can have no location), so a request that explicitly sends
+  // location_id: null means "clear it" and must be distinguished from a field the caller omitted.
+  const nextLocationId = 'location_id' in body ? body.location_id : event.location_id;
   const nextStart = start_datetime ?? event.start_datetime;
   const nextEnd = end_datetime ?? event.end_datetime;
 

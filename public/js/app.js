@@ -1268,7 +1268,7 @@ async function openEditEventModal(id) {
 
   const locations = await fetchLocations();
   const locSel = document.getElementById('edit-ev-location');
-  locSel.innerHTML = `<option value="">– select location –</option>` +
+  locSel.innerHTML = `<option value="">No location</option>` +
     locations.map(l => `<option value="${l.id}" ${l.id === ev.location_id ? 'selected' : ''}>${escHtml(l.name)}</option>`).join('');
 
   new bootstrap.Modal(document.getElementById('editEventModal')).show();
@@ -1281,6 +1281,8 @@ document.getElementById('edit-event-form').addEventListener('submit', async func
   btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span>';
 
   const id = document.getElementById('edit-ev-id').value;
+  // Explicitly null (not just omitted) when no location is picked, so the API can tell
+  // "clear the location" apart from "field wasn't sent" and actually clear it.
   let location_id = null;
   const sel = document.getElementById('edit-ev-location');
   const newLoc = document.getElementById('edit-ev-new-location')?.value.trim();
@@ -1295,6 +1297,7 @@ document.getElementById('edit-event-form').addEventListener('submit', async func
   } else if (sel && sel.value) {
     location_id = parseInt(sel.value);
   }
+  // else: sel.value === "" (the "No location" option) -> location_id stays null, clearing it.
 
   const { ok, data } = await apiFetch(`/api/events/${id}`, {
     method: 'PUT',
