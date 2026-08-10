@@ -123,6 +123,15 @@ Navigate to **/admin** and log in with the `ADMIN_PASSWORD` value you set above.
 The admin account is bootstrapped automatically on first login.
 
 ## Development
+Create a `.dev.vars` file (git-ignored) in the project root with:
+```
+JWT_SECRET=dev-secret-change-in-production
+ADMIN_PASSWORD=CollegeOfIdaho2024!
+```
+`JWT_SECRET` and `ADMIN_PASSWORD` are required — there's no built-in fallback, so login endpoints
+return a 500 without this file (or the equivalent secrets in a deployed environment). See
+[SECURITY.md](./SECURITY.md) for why.
+
 ```bash
 wrangler pages dev public --d1=DB
 ```

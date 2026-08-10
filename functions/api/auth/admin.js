@@ -8,6 +8,8 @@
  */
 import { verifyPassword, hashPassword, generateSalt } from '../../utils/crypto.js';
 import { signToken } from '../../utils/jwt.js';
+import { requireEnv } from '../../utils/env.js';
+import { checkRateLimit, recordFailedAttempt } from '../../utils/rateLimit.js';
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -23,8 +25,24 @@ export async function onRequestPost({ env, request }) {
   const { password } = body;
   if (!password) return json({ error: 'password is required' }, 400);
 
-  const jwtSecret = env.JWT_SECRET || 'change-this-secret-in-production';
-  const envAdminPassword = env.ADMIN_PASSWORD || 'CollegeOfIdaho2024!';
+  let jwtSecret, envAdminPassword;
+  try {
+    jwtSecret = requireEnv(env, 'JWT_SECRET');
+    envAdminPassword = requireEnv(env, 'ADMIN_PASSWORD');
+  } catch (err) {
+    return json({ error: err.message }, 500);
+  }
+
+  // Fails open (lets the attempt through) rather than blocking login entirely if the
+  // login_attempts table hasn't been migrated in yet — see schema.sql.
+  let ip = null;
+  try {
+    const rl = await checkRateLimit(env, request, 'admin');
+    ip = rl.ip;
+    if (!rl.allowed) {
+      return json({ error: 'Too many failed login attempts. Try again in a few minutes.' }, 429);
+    }
+  } catch { /* rate limiting unavailable; don't block login on it */ }
 
   try {
     let admin = await env.DB.prepare('SELECT * FROM admin WHERE id = 1').first();
@@ -32,6 +50,7 @@ export async function onRequestPost({ env, request }) {
     if (!admin) {
       // Bootstrap: create admin with the env-defined default password
       if (password !== envAdminPassword) {
+        if (ip) await recordFailedAttempt(env, ip, 'admin').catch(() => {});
         return json({ error: 'Incorrect password' }, 401);
       }
       const salt = generateSalt();
@@ -44,11 +63,15 @@ export async function onRequestPost({ env, request }) {
     }
 
     const valid = await verifyPassword(password, admin.password_hash, admin.salt);
-    if (!valid) return json({ error: 'Incorrect password' }, 401);
+    if (!valid) {
+      if (ip) await recordFailedAttempt(env, ip, 'admin').catch(() => {});
+      return json({ error: 'Incorrect password' }, 401);
+    }
 
     const token = await signToken({ type: 'admin' }, jwtSecret);
     return json({ token });
   } catch (err) {
-    return json({ error: err.message }, 500);
+    console.error(err);
+    return json({ error: 'Internal server error' }, 500);
   }
 }

@@ -23,7 +23,8 @@ export async function onRequestGet({ env, data }) {
     ).all();
     return json({ entities: result.results });
   } catch (err) {
-    return json({ error: err.message }, 500);
+    console.error(err);
+    return json({ error: 'Internal server error' }, 500);
   }
 }
 
@@ -40,6 +41,9 @@ export async function onRequestPost({ env, request, data }) {
   const entityType = body.type || 'club';
   if (!name || !password) {
     return json({ error: 'name and password are required' }, 400);
+  }
+  if (password.length < 8) {
+    return json({ error: 'Password must be at least 8 characters' }, 400);
   }
   if (!VALID_TYPES.includes(entityType)) {
     return json({ error: `type must be one of: ${VALID_TYPES.join(', ')}` }, 400);
@@ -59,6 +63,7 @@ export async function onRequestPost({ env, request, data }) {
     if (err.message.includes('UNIQUE')) {
       return json({ error: 'An entity with that name already exists' }, 409);
     }
-    return json({ error: err.message }, 500);
+    console.error(err);
+    return json({ error: 'Internal server error' }, 500);
   }
 }

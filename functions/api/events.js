@@ -48,7 +48,8 @@ export async function onRequestGet({ env, request }) {
     const result = await env.DB.prepare(query).bind(...params).all();
     return json({ events: result.results });
   } catch (err) {
-    return json({ error: err.message }, 500);
+    console.error(err);
+    return json({ error: 'Internal server error' }, 500);
   }
 }
 
@@ -87,6 +88,7 @@ export async function onRequestPost({ env, request, data }) {
 
     return json({ id: result.meta.last_row_id, message: 'Event created' }, 201);
   } catch (err) {
-    return json({ error: err.message }, 500);
+    console.error(err);
+    return json({ error: 'Internal server error' }, 500);
   }
 }

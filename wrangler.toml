@@ -19,7 +19,9 @@ database_id = "2fe7809f-fa14-4be0-980d-d7f3757e514d"
 #   wrangler pages secret put JWT_SECRET
 #   wrangler pages secret put ADMIN_PASSWORD
 #
-# Fallback values are used only in local dev (wrangler pages dev).
-# Create a .dev.vars file (git-ignored) with:
+# Both are REQUIRED — there is no built-in fallback (removed deliberately: a hardcoded fallback
+# baked into this public repo would mean a deployment that forgot to set these would silently
+# accept forged admin tokens / the well-known default admin password instead of failing loudly).
+# For local dev (wrangler pages dev), create a .dev.vars file (git-ignored) with:
 #   JWT_SECRET=dev-secret-change-in-production
 #   ADMIN_PASSWORD=CollegeOfIdaho2024!
