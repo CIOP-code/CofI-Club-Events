@@ -2,6 +2,11 @@
 
 Notable changes to Campus Events, newest first. Each entry links the PR that shipped it.
 
+## 2026-08-07
+
+- **College of Idaho logo in the sidebar** ([#8](https://github.com/CIOP-code/CofI-Club-Events/pull/8)) — Added above the nav buttons, positioned directly above them with no gap.
+- **Location double-booking validation** ([#7](https://github.com/CIOP-code/CofI-Club-Events/pull/7)) — `POST /api/events` and `PUT /api/events/:id` now reject (409) an overlapping location+time conflict instead of silently allowing it, with a message naming the conflicting event. Back-to-back bookings (no time overlap) are still allowed.
+
 ## 2026-08-06
 
 - **Kiosk display page** ([#5](https://github.com/CIOP-code/CofI-Club-Events/pull/5)) — Standalone, read-only `/display.html` for a TV in a public space: today + next N days (`?days=N`, default 3), auto-refreshing, no login/admin surface at all.
