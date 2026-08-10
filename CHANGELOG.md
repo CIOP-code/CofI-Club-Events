@@ -2,6 +2,11 @@
 
 Notable changes to Campus Events, newest first. Each entry links the PR that shipped it.
 
+## 2026-08-10
+
+- **Roadmap Phase 2: event detail links, .ics export, share links, search, skip-nav** ([#13](https://github.com/CIOP-code/CofI-Club-Events/pull/13)) — Clicking an event now pushes a real `/event/:id` URL (back/forward and direct loads work too); a "Add to Calendar" button downloads a standard `.ics` file per event; a "Copy Link" button copies the event's shareable URL; a search icon in the calendar header finds upcoming events by title/description/entity name; a "Skip to content" link (visible on keyboard focus) was added for accessibility.
+- **Program entity type, admin edit UI, admin menu + roadmap view** ([#12](https://github.com/CIOP-code/CofI-Club-Events/pull/12)) — Added `program` as a fifth entity type. Added edit (not just delete) for entities and events in the admin panel, which also fixed a bug where clearing an event's location silently kept the old one. Split the admin dashboard into a Dashboard section and a new in-app Roadmap section mirroring `ROADMAP.md`.
+
 ## 2026-08-07
 
 - **College of Idaho logo in the sidebar** ([#8](https://github.com/CIOP-code/CofI-Club-Events/pull/8)) — Added above the nav buttons, positioned directly above them with no gap.
