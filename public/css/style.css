@@ -67,13 +67,16 @@ body {
 }
 
 .sidebar-logo {
+  /* Match nav's right-aligned edge (flex-end + the same 12px inset) rather than centering in the
+     full sidebar width — centering vs. right-aligning put the logo and buttons on different
+     horizontal axes entirely, which is why it didn't actually line up above them. */
   display: flex;
-  justify-content: center;
+  justify-content: flex-end;
   flex-shrink: 0;
-  padding: 24px 0 4px;
+  padding: 24px 12px 4px 0;
 }
 .sidebar-logo img {
-  width: 52px;
+  width: 72px; /* match .nav-btn's width so it's the same footprint as the button below it */
   height: auto;
 }
 
@@ -152,6 +155,10 @@ body {
   color: var(--color-muted-2);
   opacity: .75;
 }
+/* When two subtle items are adjacent (About, Admin), only the first's auto margin should push
+   the pair down as a group — otherwise each gets its own share of the free space and they end
+   up scattered apart instead of grouped together at the bottom. */
+.nav-btn-subtle + .nav-btn-subtle { margin-top: 6px; }
 .nav-btn-subtle .icon-wrap { width: 20px; height: 20px; font-size: .9rem; }
 .nav-btn-subtle:hover { opacity: 1; box-shadow: none; transform: none; }
 .nav-btn-subtle.active { opacity: 1; background: var(--color-border-3); color: var(--coi-blue); border-radius: 8px; }
