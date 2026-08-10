@@ -726,6 +726,55 @@ body {
   margin-right: 0px;
 }
 
+.admin-subnav {
+  margin-bottom: 20px;
+  gap: 6px;
+}
+.admin-subnav .nav-link {
+  color: var(--color-secondary);
+  font-weight: 600;
+  font-size: .9rem;
+  border-radius: 8px;
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid transparent;
+}
+.admin-subnav .nav-link:hover { background: var(--color-border); }
+.admin-subnav .nav-link.active {
+  background: var(--coi-blue);
+  color: var(--color-surface);
+}
+
+.roadmap-phase-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.roadmap-phase-blurb {
+  color: var(--color-muted-2);
+  font-size: .88rem;
+  margin: 4px 0 0;
+}
+.roadmap-item-list {
+  list-style: none;
+  padding-left: 0;
+  margin: 14px 0 0;
+}
+.roadmap-item-list li {
+  padding: 10px 0;
+  border-top: 1px solid var(--color-border);
+}
+.roadmap-item-list li:first-child { border-top: none; padding-top: 6px; }
+.roadmap-item-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.roadmap-item-header strong { color: var(--color-strong); font-size: .92rem; }
+.roadmap-item-desc { color: var(--color-muted); font-size: .82rem; margin-top: 3px; }
+
 /* ===================================================
    ABOUT PAGE
    =================================================== */

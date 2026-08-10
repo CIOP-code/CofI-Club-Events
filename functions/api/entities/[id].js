@@ -3,7 +3,7 @@
  * PUT    /api/entities/:id  – update an entity (requires owner entity or admin)
  * DELETE /api/entities/:id  – delete an entity (requires admin)
  */
-const VALID_TYPES = ['club', 'department', 'office', 'organization'];
+const VALID_TYPES = ['club', 'department', 'office', 'organization', 'program'];
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {

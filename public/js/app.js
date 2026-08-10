@@ -251,6 +251,7 @@ const TYPE_LABELS = {
   department: 'Department',
   office: 'Office',
   organization: 'Organization',
+  program: 'Program',
 };
 
 /** Show an inline alert */
@@ -1050,6 +1051,9 @@ async function loadAdminData() {
           </div>
           <div class="ev-meta-txt">ID: ${en.id} · Created: ${new Date(en.created_at).toLocaleDateString()}</div>
         </div>
+        <button class="btn btn-sm btn-outline-secondary me-1" data-edit-entity="${en.id}" data-edit-entity-name="${escHtml(en.name)}" data-edit-entity-type="${en.type}" title="Edit entity">
+          <i class="fa-solid fa-pen"></i>
+        </button>
         <button class="btn btn-sm btn-outline-secondary me-1" data-reset-entity="${en.id}" data-reset-entity-name="${escHtml(en.name)}" title="Reset password">
           <i class="fa-solid fa-key"></i>
         </button>
@@ -1063,6 +1067,9 @@ async function loadAdminData() {
     });
     enList.querySelectorAll('[data-reset-entity]').forEach(btn => {
       btn.addEventListener('click', () => adminResetEntityPassword(parseInt(btn.dataset.resetEntity), btn.dataset.resetEntityName));
+    });
+    enList.querySelectorAll('[data-edit-entity]').forEach(btn => {
+      btn.addEventListener('click', () => openEditEntityModal(parseInt(btn.dataset.editEntity), btn.dataset.editEntityName, btn.dataset.editEntityType));
     });
   } else {
     enList.innerHTML = '<p class="text-muted small">No entities yet.</p>';
@@ -1085,6 +1092,9 @@ async function loadAdminEvents() {
           <div class="ev-title-txt">${escHtml(ev.title)}</div>
           <div class="ev-meta-txt">${escHtml(ev.entity_name)} · ${new Date(ev.start_datetime).toLocaleString()}</div>
         </div>
+        <button class="btn btn-sm btn-outline-secondary me-1" data-edit-event="${ev.id}" title="Edit event">
+          <i class="fa-solid fa-pen"></i>
+        </button>
         <button class="btn btn-sm btn-outline-danger" data-delete-event="${ev.id}">
           <i class="fa-solid fa-trash"></i>
         </button>
@@ -1092,6 +1102,9 @@ async function loadAdminEvents() {
 
     evList.querySelectorAll('[data-delete-event]').forEach(btn => {
       btn.addEventListener('click', () => adminDeleteEvent(parseInt(btn.dataset.deleteEvent)));
+    });
+    evList.querySelectorAll('[data-edit-event]').forEach(btn => {
+      btn.addEventListener('click', () => openEditEventModal(parseInt(btn.dataset.editEvent)));
     });
   } else {
     evList.innerHTML = '<p class="text-muted small">No upcoming events.</p>';
@@ -1172,6 +1185,37 @@ async function adminDeleteEntity(id) {
   loadAdminData();
 }
 
+// Edit entity (name / type)
+function openEditEntityModal(id, name, type) {
+  document.getElementById('edit-ent-id').value = id;
+  document.getElementById('edit-ent-name').value = name;
+  document.getElementById('edit-ent-type').value = type;
+  hideAlert('edit-entity-msg');
+  new bootstrap.Modal(document.getElementById('editEntityModal')).show();
+}
+
+document.getElementById('edit-entity-form').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideAlert('edit-entity-msg');
+  const btn = this.querySelector('button[type=submit]');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span>';
+
+  const id = document.getElementById('edit-ent-id').value;
+  const { ok, data } = await apiFetch(`/api/entities/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      name: document.getElementById('edit-ent-name').value.trim(),
+      type: document.getElementById('edit-ent-type').value,
+    }),
+  });
+
+  btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Save Changes';
+
+  if (!ok) { showAlert('edit-entity-msg', data.error || 'Failed to update entity'); return; }
+  bootstrap.Modal.getInstance(document.getElementById('editEntityModal')).hide();
+  loadAdminData();
+});
+
 // Reset an entity's password (e.g. when its point of contact changes). The old password stops
 // working immediately; the new temp password is shown once and the entity must set their own
 // on next login.
@@ -1206,6 +1250,208 @@ async function adminDeleteEvent(id) {
   const { ok, data } = await apiFetch(`/api/events/${id}`, { method: 'DELETE' });
   if (!ok) { alert(data.error || 'Failed to delete event'); return; }
   loadAdminEvents();
+}
+
+// Edit event (title / description / location / start / end – entity can't be changed)
+async function openEditEventModal(id) {
+  hideAlert('edit-event-msg');
+  const { ok, data } = await apiFetch(`/api/events/${id}`);
+  if (!ok) { alert(data.error || 'Failed to load event'); return; }
+  const ev = data.event;
+
+  document.getElementById('edit-ev-id').value = ev.id;
+  document.getElementById('edit-ev-title').value = ev.title;
+  document.getElementById('edit-ev-desc').value = ev.description || '';
+  document.getElementById('edit-ev-start').value = formatDateTimeLocal(new Date(ev.start_datetime));
+  document.getElementById('edit-ev-end').value = formatDateTimeLocal(new Date(ev.end_datetime));
+  document.getElementById('edit-ev-new-location').value = '';
+
+  const locations = await fetchLocations();
+  const locSel = document.getElementById('edit-ev-location');
+  locSel.innerHTML = `<option value="">No location</option>` +
+    locations.map(l => `<option value="${l.id}" ${l.id === ev.location_id ? 'selected' : ''}>${escHtml(l.name)}</option>`).join('');
+
+  new bootstrap.Modal(document.getElementById('editEventModal')).show();
+}
+
+document.getElementById('edit-event-form').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideAlert('edit-event-msg');
+  const btn = this.querySelector('button[type=submit]');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span>';
+
+  const id = document.getElementById('edit-ev-id').value;
+  // Explicitly null (not just omitted) when no location is picked, so the API can tell
+  // "clear the location" apart from "field wasn't sent" and actually clear it.
+  let location_id = null;
+  const sel = document.getElementById('edit-ev-location');
+  const newLoc = document.getElementById('edit-ev-new-location')?.value.trim();
+  if (newLoc) {
+    try {
+      location_id = await ensureLocation(newLoc);
+    } catch (err) {
+      showAlert('edit-event-msg', err.message || 'Failed to create location');
+      btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Save Changes';
+      return;
+    }
+  } else if (sel && sel.value) {
+    location_id = parseInt(sel.value);
+  }
+  // else: sel.value === "" (the "No location" option) -> location_id stays null, clearing it.
+
+  const { ok, data } = await apiFetch(`/api/events/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      title:          document.getElementById('edit-ev-title').value.trim(),
+      description:    document.getElementById('edit-ev-desc').value.trim(),
+      location_id,
+      start_datetime: document.getElementById('edit-ev-start').value,
+      end_datetime:   document.getElementById('edit-ev-end').value,
+    }),
+  });
+
+  btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Save Changes';
+
+  if (!ok) { showAlert('edit-event-msg', data.error || 'Failed to update event'); return; }
+  bootstrap.Modal.getInstance(document.getElementById('editEventModal')).hide();
+  loadAdminEvents();
+});
+
+/* =============================================================
+   ADMIN: MENU + IN-APP ROADMAP
+   ============================================================= */
+document.querySelectorAll('#admin-subnav [data-admin-section]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#admin-subnav [data-admin-section]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.admin-section').forEach(sec => sec.classList.add('d-none'));
+    document.getElementById(`admin-section-${btn.dataset.adminSection}`).classList.remove('d-none');
+    if (btn.dataset.adminSection === 'roadmap') renderAdminRoadmap();
+  });
+});
+
+// Mirrors ROADMAP.md, broken into phases/sub-phases for the in-app admin view. Keep both in sync
+// when items ship or get reprioritized.
+const ROADMAP_PHASES = [
+  {
+    title: 'Phase 1 — Admin Experience',
+    status: 'shipped',
+    blurb: 'Turn the single-page admin dashboard into a real multi-section tool.',
+    items: [
+      { title: 'Admin menu (multi-section panel)', status: 'shipped',
+        desc: 'Splits the dashboard into a Dashboard section (create/manage entities & events) and this Roadmap section, navigable via the pills above instead of one long scroll.' },
+      { title: 'In-app phased roadmap view', status: 'shipped',
+        desc: 'This page — mirrors ROADMAP.md so anyone with admin access can see what’s planned without reading the repo.' },
+      { title: 'Edit entities & events in place', status: 'shipped',
+        desc: 'Pencil-icon edit buttons open a modal instead of requiring delete-and-recreate, which used to lose an entity’s id/password history or an event’s data.' },
+      { title: '"Program" entity type', status: 'shipped',
+        desc: 'A fifth entity type alongside Club/Department/Office/Organization.' },
+    ],
+  },
+  {
+    title: 'Phase 2 — Event Discovery Quick Wins',
+    status: 'planned',
+    blurb: 'Small, mostly self-contained features inspired by events.brown.edu (LiveWhale Calendar) that make individual events easier to find, share, and get onto someone’s own calendar.',
+    items: [
+      { title: 'Shareable event detail pages', status: 'planned',
+        desc: 'A real URL per event (e.g. /event/:id) instead of only a modal inside the SPA, so a link can be texted or posted and opens straight to that event.' },
+      { title: 'Add to Calendar (.ics)', status: 'planned',
+        desc: 'One-click download of a standard .ics file for a single event — a small endpoint that formats one event as iCalendar. Self-contained.' },
+      { title: 'Share links', status: 'planned',
+        desc: 'Copy-link / native share button on the event detail page. Depends on shareable event pages existing first.' },
+      { title: 'Event search', status: 'planned',
+        desc: 'Free-text search across all events (title/description/entity), not just the existing entity-name filter on the Entities page.' },
+      { title: 'Skip-navigation link', status: 'planned',
+        desc: 'A hidden-until-focused "Skip to content" link at the top of the page for keyboard/screen-reader users — standard accessibility practice, and something LiveWhale Calendar includes.' },
+    ],
+  },
+  {
+    title: 'Phase 3 — Calendar Navigation & Filtering',
+    status: 'planned',
+    items: [
+      { title: 'Mini-calendar heat map', status: 'planned',
+        desc: 'A small month-at-a-glance widget shading days by how many events they have, for quickly spotting busy days.' },
+      { title: 'Jump-to-Day', status: 'planned',
+        desc: 'A date picker that jumps the week/day view straight to a chosen date instead of paging one day/week at a time.' },
+      { title: 'Tags / categories', status: 'planned',
+        desc: 'Free-form or curated tags on events (e.g. "Fundraiser", "Athletics") independent of entity type, with a tag filter alongside the existing type filter.' },
+      { title: 'Subscribable filtered feed (RSS/iCal)', status: 'planned',
+        desc: 'A live-updating feed URL reflecting the same filters as the Entities page (e.g. "just Chess Club"), so a calendar app stays in sync automatically instead of a one-time .ics download.' },
+    ],
+  },
+  {
+    title: 'Phase 4 — Richer Event Types',
+    status: 'planned',
+    items: [
+      { title: 'Recurring events', status: 'planned',
+        desc: 'Weekly/monthly event series with an edit-this-vs-edit-series distinction. The biggest schema/UX change on this list — needs a recurrence-rule column and instance-expansion logic.' },
+      { title: 'Virtual / hybrid events', status: 'planned',
+        desc: 'An optional join-link field and a "Virtual"/"Hybrid" badge and filter, for events not tied to a physical campus location.' },
+    ],
+  },
+  {
+    title: 'Phase 5 — Media & Structured Data',
+    status: 'planned',
+    items: [
+      { title: 'Image storage infrastructure', status: 'planned',
+        desc: 'Reintroduces file storage (deliberately dropped earlier): an R2 bucket bound in wrangler.toml for both prod and preview, an upload endpoint, and rewriting the currently-stubbed functions/api/files/[key].js (currently 410 Gone) to serve from R2.' },
+      { title: 'Entity logo upload', status: 'planned',
+        desc: 'Replace the current icon-plus-initial with an actual uploaded image, once image storage exists.' },
+      { title: 'Event poster images', status: 'planned',
+        desc: 'Photo-forward event cards, also depends on image storage.' },
+      { title: 'schema.org structured data', status: 'planned',
+        desc: 'Embed Event/Organization JSON-LD on event/entity pages so search engines and calendar aggregators can read them — pairs naturally with shareable event pages and poster images.' },
+    ],
+  },
+  {
+    title: 'Phase 6 — Admin & Governance',
+    status: 'planned',
+    items: [
+      { title: 'Admin-managed kiosk settings', status: 'planned',
+        desc: '/display.html’s day count is currently a URL parameter (?days=N) set once at TV setup — deliberately simple. Would become a real admin-panel setting if that stops being a one-time thing (e.g. multiple screens needing different settings).' },
+      { title: 'Per-person entity logins / audit trail', status: 'planned',
+        desc: 'Entities currently share one password per organization, which suits how they’re used today. Would need named per-person logins if tracking who specifically posted each event ever becomes important — a bigger change.' },
+    ],
+  },
+];
+
+const ROADMAP_STATUS_BADGE = {
+  shipped:      '<span class="badge bg-success">Shipped</span>',
+  'in-progress':'<span class="badge bg-primary">In Progress</span>',
+  planned:      '<span class="badge bg-secondary">Planned</span>',
+};
+
+function renderAdminRoadmap() {
+  const el = document.getElementById('admin-section-roadmap');
+  if (!el || el.dataset.rendered) return;
+  el.dataset.rendered = '1';
+
+  el.innerHTML = `
+    <p class="text-muted small mb-3">
+      What's built and what's next — not a promise or a timeline, just so ideas don't get lost
+      between sessions. Full detail in <code>ROADMAP.md</code>; shipped work is in <code>CHANGELOG.md</code>.
+    </p>
+    ${ROADMAP_PHASES.map(phase => `
+      <div class="section-card mb-3">
+        <div class="roadmap-phase-header">
+          <h4 class="mb-0">${escHtml(phase.title)}</h4>
+          ${ROADMAP_STATUS_BADGE[phase.status] || ''}
+        </div>
+        ${phase.blurb ? `<p class="roadmap-phase-blurb">${escHtml(phase.blurb)}</p>` : ''}
+        <ul class="roadmap-item-list">
+          ${phase.items.map(item => `
+            <li>
+              <div class="roadmap-item-header">
+                <strong>${escHtml(item.title)}</strong>
+                ${ROADMAP_STATUS_BADGE[item.status] || ''}
+              </div>
+              <div class="roadmap-item-desc">${escHtml(item.desc)}</div>
+            </li>
+          `).join('')}
+        </ul>
+      </div>
+    `).join('')}
+  `;
 }
 
 /* =============================================================
