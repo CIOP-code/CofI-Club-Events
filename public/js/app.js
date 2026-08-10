@@ -1051,6 +1051,9 @@ async function loadAdminData() {
           </div>
           <div class="ev-meta-txt">ID: ${en.id} · Created: ${new Date(en.created_at).toLocaleDateString()}</div>
         </div>
+        <button class="btn btn-sm btn-outline-secondary me-1" data-edit-entity="${en.id}" data-edit-entity-name="${escHtml(en.name)}" data-edit-entity-type="${en.type}" title="Edit entity">
+          <i class="fa-solid fa-pen"></i>
+        </button>
         <button class="btn btn-sm btn-outline-secondary me-1" data-reset-entity="${en.id}" data-reset-entity-name="${escHtml(en.name)}" title="Reset password">
           <i class="fa-solid fa-key"></i>
         </button>
@@ -1064,6 +1067,9 @@ async function loadAdminData() {
     });
     enList.querySelectorAll('[data-reset-entity]').forEach(btn => {
       btn.addEventListener('click', () => adminResetEntityPassword(parseInt(btn.dataset.resetEntity), btn.dataset.resetEntityName));
+    });
+    enList.querySelectorAll('[data-edit-entity]').forEach(btn => {
+      btn.addEventListener('click', () => openEditEntityModal(parseInt(btn.dataset.editEntity), btn.dataset.editEntityName, btn.dataset.editEntityType));
     });
   } else {
     enList.innerHTML = '<p class="text-muted small">No entities yet.</p>';
@@ -1086,6 +1092,9 @@ async function loadAdminEvents() {
           <div class="ev-title-txt">${escHtml(ev.title)}</div>
           <div class="ev-meta-txt">${escHtml(ev.entity_name)} · ${new Date(ev.start_datetime).toLocaleString()}</div>
         </div>
+        <button class="btn btn-sm btn-outline-secondary me-1" data-edit-event="${ev.id}" title="Edit event">
+          <i class="fa-solid fa-pen"></i>
+        </button>
         <button class="btn btn-sm btn-outline-danger" data-delete-event="${ev.id}">
           <i class="fa-solid fa-trash"></i>
         </button>
@@ -1093,6 +1102,9 @@ async function loadAdminEvents() {
 
     evList.querySelectorAll('[data-delete-event]').forEach(btn => {
       btn.addEventListener('click', () => adminDeleteEvent(parseInt(btn.dataset.deleteEvent)));
+    });
+    evList.querySelectorAll('[data-edit-event]').forEach(btn => {
+      btn.addEventListener('click', () => openEditEventModal(parseInt(btn.dataset.editEvent)));
     });
   } else {
     evList.innerHTML = '<p class="text-muted small">No upcoming events.</p>';
@@ -1173,6 +1185,37 @@ async function adminDeleteEntity(id) {
   loadAdminData();
 }
 
+// Edit entity (name / type)
+function openEditEntityModal(id, name, type) {
+  document.getElementById('edit-ent-id').value = id;
+  document.getElementById('edit-ent-name').value = name;
+  document.getElementById('edit-ent-type').value = type;
+  hideAlert('edit-entity-msg');
+  new bootstrap.Modal(document.getElementById('editEntityModal')).show();
+}
+
+document.getElementById('edit-entity-form').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideAlert('edit-entity-msg');
+  const btn = this.querySelector('button[type=submit]');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span>';
+
+  const id = document.getElementById('edit-ent-id').value;
+  const { ok, data } = await apiFetch(`/api/entities/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      name: document.getElementById('edit-ent-name').value.trim(),
+      type: document.getElementById('edit-ent-type').value,
+    }),
+  });
+
+  btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Save Changes';
+
+  if (!ok) { showAlert('edit-entity-msg', data.error || 'Failed to update entity'); return; }
+  bootstrap.Modal.getInstance(document.getElementById('editEntityModal')).hide();
+  loadAdminData();
+});
+
 // Reset an entity's password (e.g. when its point of contact changes). The old password stops
 // working immediately; the new temp password is shown once and the entity must set their own
 // on next login.
@@ -1208,6 +1251,68 @@ async function adminDeleteEvent(id) {
   if (!ok) { alert(data.error || 'Failed to delete event'); return; }
   loadAdminEvents();
 }
+
+// Edit event (title / description / location / start / end – entity can't be changed)
+async function openEditEventModal(id) {
+  hideAlert('edit-event-msg');
+  const { ok, data } = await apiFetch(`/api/events/${id}`);
+  if (!ok) { alert(data.error || 'Failed to load event'); return; }
+  const ev = data.event;
+
+  document.getElementById('edit-ev-id').value = ev.id;
+  document.getElementById('edit-ev-title').value = ev.title;
+  document.getElementById('edit-ev-desc').value = ev.description || '';
+  document.getElementById('edit-ev-start').value = formatDateTimeLocal(new Date(ev.start_datetime));
+  document.getElementById('edit-ev-end').value = formatDateTimeLocal(new Date(ev.end_datetime));
+  document.getElementById('edit-ev-new-location').value = '';
+
+  const locations = await fetchLocations();
+  const locSel = document.getElementById('edit-ev-location');
+  locSel.innerHTML = `<option value="">– select location –</option>` +
+    locations.map(l => `<option value="${l.id}" ${l.id === ev.location_id ? 'selected' : ''}>${escHtml(l.name)}</option>`).join('');
+
+  new bootstrap.Modal(document.getElementById('editEventModal')).show();
+}
+
+document.getElementById('edit-event-form').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideAlert('edit-event-msg');
+  const btn = this.querySelector('button[type=submit]');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span>';
+
+  const id = document.getElementById('edit-ev-id').value;
+  let location_id = null;
+  const sel = document.getElementById('edit-ev-location');
+  const newLoc = document.getElementById('edit-ev-new-location')?.value.trim();
+  if (newLoc) {
+    try {
+      location_id = await ensureLocation(newLoc);
+    } catch (err) {
+      showAlert('edit-event-msg', err.message || 'Failed to create location');
+      btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Save Changes';
+      return;
+    }
+  } else if (sel && sel.value) {
+    location_id = parseInt(sel.value);
+  }
+
+  const { ok, data } = await apiFetch(`/api/events/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      title:          document.getElementById('edit-ev-title').value.trim(),
+      description:    document.getElementById('edit-ev-desc').value.trim(),
+      location_id,
+      start_datetime: document.getElementById('edit-ev-start').value,
+      end_datetime:   document.getElementById('edit-ev-end').value,
+    }),
+  });
+
+  btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Save Changes';
+
+  if (!ok) { showAlert('edit-event-msg', data.error || 'Failed to update event'); return; }
+  bootstrap.Modal.getInstance(document.getElementById('editEventModal')).hide();
+  loadAdminEvents();
+});
 
 /* =============================================================
    INIT

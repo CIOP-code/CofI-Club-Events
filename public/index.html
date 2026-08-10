@@ -481,6 +481,90 @@
   </div>
 </div>
 
+<!-- Edit Entity Modal -->
+<div class="modal fade" id="editEntityModal" tabindex="-1" aria-labelledby="editEntityModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:420px">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold" id="editEntityModalLabel">
+          <i class="fa-solid fa-pen me-2"></i>Edit Entity
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="edit-entity-form">
+          <input type="hidden" id="edit-ent-id" />
+          <div class="mb-2">
+            <label class="form-label" for="edit-ent-name">Entity Name *</label>
+            <input type="text" class="form-control" id="edit-ent-name" required />
+          </div>
+          <div class="mb-2">
+            <label class="form-label" for="edit-ent-type">Type *</label>
+            <select class="form-select" id="edit-ent-type" required>
+              <option value="club">Club</option>
+              <option value="department">Department</option>
+              <option value="office">Office</option>
+              <option value="organization">Organization</option>
+              <option value="program">Program</option>
+            </select>
+          </div>
+          <div id="edit-entity-msg" class="alert-inline d-none mb-2"></div>
+          <button type="submit" class="btn-coi-secondary mt-1">
+            <i class="fa-solid fa-check me-1"></i>Save Changes
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Event Modal -->
+<div class="modal fade" id="editEventModal" tabindex="-1" aria-labelledby="editEventModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" style="max-width:480px">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold" id="editEventModalLabel">
+          <i class="fa-solid fa-pen me-2"></i>Edit Event
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="edit-event-form">
+          <input type="hidden" id="edit-ev-id" />
+          <div class="mb-2">
+            <label class="form-label" for="edit-ev-title">Event Name *</label>
+            <input type="text" class="form-control" id="edit-ev-title" required />
+          </div>
+          <div class="mb-2">
+            <label class="form-label" for="edit-ev-desc">Description</label>
+            <textarea class="form-control" id="edit-ev-desc" rows="2"></textarea>
+          </div>
+          <div class="mb-2">
+            <label class="form-label" for="edit-ev-location">Location</label>
+            <select class="form-select" id="edit-ev-location"></select>
+            <div class="form-text">Or add a new location below.</div>
+            <input type="text" class="form-control mt-2" id="edit-ev-new-location" placeholder="New location name (optional)" />
+          </div>
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label" for="edit-ev-start">Start *</label>
+              <input type="datetime-local" class="form-control" id="edit-ev-start" required />
+            </div>
+            <div class="col-6">
+              <label class="form-label" for="edit-ev-end">End *</label>
+              <input type="datetime-local" class="form-control" id="edit-ev-end" required />
+            </div>
+          </div>
+          <div id="edit-event-msg" class="alert-inline d-none mb-2"></div>
+          <button type="submit" class="btn-coi-secondary mt-2">
+            <i class="fa-solid fa-check me-1"></i>Save Changes
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Bootstrap 5 JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <!-- App JS -->
