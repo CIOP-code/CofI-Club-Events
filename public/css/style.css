@@ -82,7 +82,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: flex-end; /* right align buttons */
-  justify-content: center; /* center vertically */
+  justify-content: flex-start; /* start right under .sidebar-logo instead of centering with a gap */
   flex: 1; /* fill the space left by .sidebar-logo, rather than height:100% which would overlap it */
   min-height: 0;
   padding-right: 12px;
