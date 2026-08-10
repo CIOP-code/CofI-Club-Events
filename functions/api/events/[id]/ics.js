@@ -28,6 +28,45 @@ function toIcsLocal(dtStr) {
   return `${y}${mo}${d}T${h}${mi}${s || '00'}`;
 }
 
+// Google/Apple accept a bare IANA TZID like "America/Boise" with no further definition, but
+// Outlook's importer rejects the whole file ("Couldn't import calendar") unless the TZID is
+// actually defined via a VTIMEZONE block. This is the standard Mountain Time definition (matches
+// current US DST rules: 2nd Sunday in March -> 1st Sunday in November) that Outlook itself emits.
+const VTIMEZONE_AMERICA_BOISE = [
+  'BEGIN:VTIMEZONE',
+  'TZID:America/Boise',
+  'BEGIN:DAYLIGHT',
+  'TZOFFSETFROM:-0700',
+  'TZOFFSETTO:-0600',
+  'TZNAME:MDT',
+  'DTSTART:19700308T020000',
+  'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU',
+  'END:DAYLIGHT',
+  'BEGIN:STANDARD',
+  'TZOFFSETFROM:-0600',
+  'TZOFFSETTO:-0700',
+  'TZNAME:MST',
+  'DTSTART:19701101T020000',
+  'RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU',
+  'END:STANDARD',
+  'END:VTIMEZONE',
+];
+
+// RFC 5545 requires lines to be folded at 75 octets, with continuation lines starting with a
+// single space. Outlook is stricter about this than Google/Apple and can fail on long
+// unfolded SUMMARY/DESCRIPTION lines.
+function foldLine(line) {
+  const max = 75;
+  if (line.length <= max) return line;
+  let result = line.slice(0, max);
+  let rest = line.slice(max);
+  while (rest.length > 0) {
+    result += '\r\n ' + rest.slice(0, max - 1);
+    rest = rest.slice(max - 1);
+  }
+  return result;
+}
+
 export async function onRequestGet({ env, params, request }) {
   const { id } = params;
   const event = await env.DB.prepare(
@@ -51,6 +90,7 @@ export async function onRequestGet({ env, params, request }) {
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
     'X-WR-TIMEZONE:America/Boise',
+    ...VTIMEZONE_AMERICA_BOISE,
     'BEGIN:VEVENT',
     `UID:event-${event.id}@${url.hostname}`,
     `DTSTAMP:${toIcsUtcNow()}`,
@@ -62,7 +102,7 @@ export async function onRequestGet({ env, params, request }) {
     `CATEGORIES:${icsEscape(event.entity_name)}`,
     'END:VEVENT',
     'END:VCALENDAR',
-  ].filter(Boolean);
+  ].filter(Boolean).map(foldLine);
 
   return new Response(lines.join('\r\n'), {
     status: 200,
