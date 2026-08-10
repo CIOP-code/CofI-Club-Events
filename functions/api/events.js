@@ -1,6 +1,6 @@
 /**
- * GET  /api/events?start=&end=   – list events (with optional date range filter)
- * POST /api/events                – create a new event (requires entity or admin auth)
+ * GET  /api/events?start=&end=&q=   – list events (optional date range + text search filters)
+ * POST /api/events                   – create a new event (requires entity or admin auth)
  */
 import { findLocationConflict, locationConflictMessage } from '../utils/scheduling.js';
 
@@ -15,6 +15,7 @@ export async function onRequestGet({ env, request }) {
   const url = new URL(request.url);
   const start = url.searchParams.get('start');
   const end   = url.searchParams.get('end');
+  const q     = url.searchParams.get('q');
 
   let query = `
     SELECT e.*, en.name AS entity_name, en.type AS entity_type, l.name AS location_name
@@ -22,17 +23,26 @@ export async function onRequestGet({ env, request }) {
     JOIN entities en ON e.entity_id = en.id
     LEFT JOIN locations l ON e.location_id = l.id
   `;
+  const conditions = [];
   const params = [];
 
   if (start && end) {
-    query += ` WHERE e.start_datetime >= ? AND e.start_datetime <= ?`;
+    conditions.push(`e.start_datetime >= ? AND e.start_datetime <= ?`);
     params.push(start, end);
   } else if (start) {
-    query += ` WHERE e.start_datetime >= ?`;
+    conditions.push(`e.start_datetime >= ?`);
     params.push(start);
   }
 
+  if (q) {
+    conditions.push(`(e.title LIKE ? OR e.description LIKE ? OR en.name LIKE ?)`);
+    const like = `%${q}%`;
+    params.push(like, like, like);
+  }
+
+  if (conditions.length) query += ` WHERE ` + conditions.join(' AND ');
   query += ` ORDER BY e.start_datetime ASC`;
+  if (q) query += ` LIMIT 50`;
 
   try {
     const result = await env.DB.prepare(query).bind(...params).all();

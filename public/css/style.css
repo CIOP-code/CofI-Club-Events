@@ -38,6 +38,25 @@ body {
   overflow-x: hidden;
 }
 
+/* Off-screen until keyboard-focused, so keyboard/screen-reader users can jump straight past the
+   sidebar nav without a visible element for mouse users who don't need it. */
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 0;
+  background: var(--coi-blue);
+  color: #fff;
+  padding: 10px 18px;
+  border-radius: 0 0 8px 0;
+  font-weight: 600;
+  font-size: .9rem;
+  text-decoration: none;
+  z-index: 3000;
+}
+.skip-link:focus {
+  top: 0;
+}
+
 /* ---- Scrollbar ---- */
 ::-webkit-scrollbar { width: 3px; height: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }

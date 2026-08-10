@@ -647,11 +647,14 @@ function openOverflowModal(hiddenEvents, allEvents) {
   new bootstrap.Modal(document.getElementById('overflowEventsModal')).show();
 }
 
-function openEventModal(evId, events) {
-  const ev = events.find(e => String(e.id) === String(evId));
-  if (!ev) return;
+// Tracks the URL the user was on before opening an event modal (whether via click or a deep
+// link), so closing the modal restores it. Reset to null once consumed on close, so viewing
+// several events back-to-back within one modal session still returns to the *original* page —
+// not to whichever event was open right before the last one.
+let preEventModalPath = null;
 
-  const modal = new bootstrap.Modal(document.getElementById('eventModal'));
+function renderEventModal(ev) {
+  const modalEl = document.getElementById('eventModal');
   const start = new Date(ev.start_datetime);
   const end   = new Date(ev.end_datetime);
 
@@ -659,21 +662,73 @@ function openEventModal(evId, events) {
   document.getElementById('event-modal-title').textContent = ev.title;
   document.getElementById('event-modal-entity-badge').textContent = ev.entity_name || '';
   document.getElementById('event-modal-time').textContent =
-    `${fmt(start,{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})} – ${fmt(end,{hour:'numeric',minute:'2-digit'})}`;
+    `${fmt(start,{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})} – ${fmt(end,{hour:'numeric',minute:'2-digit'})}` +
+    (ev.location_name ? ` · ${ev.location_name}` : '');
   document.getElementById('event-modal-desc').textContent = ev.description || 'No description provided.';
-
-  // Display location instead of poster image
-  const img = document.getElementById('event-modal-poster');
-  if (ev.location_name) {
-    img.classList.add('d-none');
-    // append location to time display
-    document.getElementById('event-modal-time').textContent += ` · ${escHtml(ev.location_name)}`;
-  } else {
-    img.classList.add('d-none');
-  }
-
-  modal.show();
+  document.getElementById('event-modal-poster').classList.add('d-none');
+  document.getElementById('event-modal-ics-link').href = `/api/events/${ev.id}/ics`;
+  hideAlert('event-modal-copied-msg');
+  modalEl.dataset.eventId = ev.id;
 }
+
+function showEventModal(ev, { pushState = true } = {}) {
+  renderEventModal(ev);
+  if (pushState) {
+    if (preEventModalPath === null) preEventModalPath = location.pathname + location.search;
+    if (location.pathname !== `/event/${ev.id}`) {
+      history.pushState({}, '', `/event/${ev.id}`);
+    }
+  }
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('eventModal')).show();
+}
+
+function openEventModal(evId, events) {
+  const ev = events.find(e => String(e.id) === String(evId));
+  if (!ev) return;
+  showEventModal(ev);
+}
+
+// Used for deep links (/event/:id loaded directly) and browser back/forward, where the event
+// isn't necessarily among whatever's currently rendered in the calendar grid.
+async function openEventModalById(id, opts = {}) {
+  const { ok, data } = await apiFetch(`/api/events/${id}`);
+  if (!ok) return;
+  showEventModal(data.event, opts);
+}
+
+document.getElementById('eventModal').addEventListener('hidden.bs.modal', () => {
+  if (/^\/event\/\d+$/.test(location.pathname)) {
+    history.pushState({}, '', preEventModalPath || '/');
+  }
+  preEventModalPath = null;
+});
+
+document.getElementById('event-modal-copy-link').addEventListener('click', async () => {
+  const id = document.getElementById('eventModal').dataset.eventId;
+  if (!id) return;
+  const url = `${location.origin}/event/${id}`;
+  try {
+    await navigator.clipboard.writeText(url);
+  } catch (e) {
+    const tmp = document.createElement('input');
+    tmp.value = url;
+    document.body.appendChild(tmp);
+    tmp.select();
+    document.execCommand('copy');
+    document.body.removeChild(tmp);
+  }
+  showAlert('event-modal-copied-msg', 'Link copied to clipboard', 'success');
+  setTimeout(() => hideAlert('event-modal-copied-msg'), 2000);
+});
+
+window.addEventListener('popstate', () => {
+  const m = location.pathname.match(/^\/event\/(\d+)$/);
+  if (m) {
+    openEventModalById(m[1], { pushState: false });
+  } else {
+    bootstrap.Modal.getInstance(document.getElementById('eventModal'))?.hide();
+  }
+});
 
 function setViewToggleActive(view) {
   document.getElementById('btn-view-week').classList.toggle('active', view === 'week');
@@ -1455,6 +1510,65 @@ function renderAdminRoadmap() {
 }
 
 /* =============================================================
+   EVENT SEARCH
+   ============================================================= */
+document.getElementById('btn-event-search').addEventListener('click', () => {
+  const input = document.getElementById('event-search-input');
+  input.value = '';
+  document.getElementById('event-search-results').innerHTML =
+    '<p class="text-muted small">Start typing to search upcoming events.</p>';
+  new bootstrap.Modal(document.getElementById('eventSearchModal')).show();
+  setTimeout(() => input.focus(), 200);
+});
+
+async function runEventSearch(q) {
+  const resultsEl = document.getElementById('event-search-results');
+  if (!q.trim()) {
+    resultsEl.innerHTML = '<p class="text-muted small">Start typing to search upcoming events.</p>';
+    return;
+  }
+
+  const { ok, data } = await apiFetch(`/api/events?start=${isoLocal(new Date())}&q=${encodeURIComponent(q.trim())}`);
+  const results = ok ? (data.events || []) : [];
+
+  if (!results.length) {
+    resultsEl.innerHTML = '<p class="text-muted small">No upcoming events match your search.</p>';
+    return;
+  }
+
+  resultsEl.innerHTML = results.map(ev => {
+    const start = new Date(ev.start_datetime);
+    const end = new Date(ev.end_datetime);
+    const timeStr = `${fmt(start,{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})} – ${fmt(end,{hour:'numeric',minute:'2-digit'})}`;
+    return `<div class="event-list-item search-result-item" data-ev-id="${ev.id}" style="cursor:pointer">
+      <div class="ev-info">
+        <div class="ev-title-txt">${escHtml(ev.title)}</div>
+        <div class="ev-meta-txt">${escHtml(ev.entity_name || '')} · ${escHtml(timeStr)}${ev.location_name ? ' · ' + escHtml(ev.location_name) : ''}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  resultsEl.querySelectorAll('.search-result-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const ev = results.find(e => String(e.id) === el.dataset.evId);
+      bootstrap.Modal.getInstance(document.getElementById('eventSearchModal'))?.hide();
+      if (ev) showEventModal(ev);
+    });
+  });
+}
+
+document.getElementById('event-search-input').addEventListener('input', debounce(function () {
+  runEventSearch(this.value);
+}, 300));
+
+/* =============================================================
    INIT
    ============================================================= */
 navigate('home');
+
+// Support deep links / shared links to a single event (e.g. /event/42), including when the SPA
+// boots from public/404.html's fallback for a path Cloudflare Pages doesn't otherwise match.
+(function handleInitialEventDeepLink() {
+  const m = location.pathname.match(/^\/event\/(\d+)$/);
+  if (m) openEventModalById(m[1], { pushState: false });
+})();
