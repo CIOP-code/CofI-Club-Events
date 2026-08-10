@@ -251,6 +251,7 @@ const TYPE_LABELS = {
   department: 'Department',
   office: 'Office',
   organization: 'Organization',
+  program: 'Program',
 };
 
 /** Show an inline alert */

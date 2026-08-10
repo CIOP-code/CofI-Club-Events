@@ -4,7 +4,7 @@
  */
 import { generateSalt, hashPassword } from '../utils/crypto.js';
 
-const VALID_TYPES = ['club', 'department', 'office', 'organization'];
+const VALID_TYPES = ['club', 'department', 'office', 'organization', 'program'];
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {

@@ -5,7 +5,7 @@
 CREATE TABLE IF NOT EXISTS entities (
   id                   INTEGER PRIMARY KEY AUTOINCREMENT,
   name                 TEXT    NOT NULL UNIQUE,
-  type                 TEXT    NOT NULL DEFAULT 'club' CHECK (type IN ('club', 'department', 'office', 'organization')),
+  type                 TEXT    NOT NULL DEFAULT 'club' CHECK (type IN ('club', 'department', 'office', 'organization', 'program')),
   password_hash        TEXT    NOT NULL,
   salt                 TEXT    NOT NULL,
   must_change_password INTEGER NOT NULL DEFAULT 1,
@@ -57,3 +57,23 @@ CREATE TABLE IF NOT EXISTS admin (
 
 -- Migration to add forced first-login / admin-reset password support to an already-migrated entities table:
 --   ALTER TABLE entities ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0;
+
+-- Migration to add 'program' as a valid entity type to an already-migrated entities table.
+-- SQLite can't ALTER a CHECK constraint in place, so this rebuilds the table (safe: it preserves
+-- ids, so events.entity_id foreign keys still resolve correctly). foreign_keys must be turned off
+-- first: with it on, DROP TABLE performs an implicit DELETE FROM on the dropped table, which fires
+-- ON DELETE CASCADE on events and silently wipes every event row. Run each statement in order:
+--   PRAGMA foreign_keys=OFF;
+--   CREATE TABLE entities_new (
+--     id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+--     name                 TEXT    NOT NULL UNIQUE,
+--     type                 TEXT    NOT NULL DEFAULT 'club' CHECK (type IN ('club', 'department', 'office', 'organization', 'program')),
+--     password_hash        TEXT    NOT NULL,
+--     salt                 TEXT    NOT NULL,
+--     must_change_password INTEGER NOT NULL DEFAULT 0,
+--     created_at           DATETIME DEFAULT CURRENT_TIMESTAMP
+--   );
+--   INSERT INTO entities_new SELECT * FROM entities;
+--   DROP TABLE entities;
+--   ALTER TABLE entities_new RENAME TO entities;
+--   PRAGMA foreign_keys=ON;
