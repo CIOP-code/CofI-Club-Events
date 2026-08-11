@@ -126,6 +126,19 @@ wrangler pages deploy public
 Navigate to **/admin** and log in with the `ADMIN_PASSWORD` value you set above.
 The admin account is bootstrapped automatically on first login.
 
+### 6. (Optional) Bulk-import entities
+`scripts/seed-entities.mjs` creates a batch of entities from a JSON file
+(see `scripts/clubs-2025-2026.json` for the shape/example) against a live deployment, via the
+real API — not a direct database write — so it gets the same name-uniqueness and validation
+checks as creating one by hand. Each entity gets a random temporary password (forced to change on
+first login, same as any admin-created entity); already-existing names are skipped, not treated as
+a failure, so it's safe to re-run.
+```bash
+ADMIN_PASSWORD=... node scripts/seed-entities.mjs scripts/clubs-2025-2026.json --base-url https://your-site.pages.dev
+```
+Writes `scripts/seed-results-<timestamp>.csv` (git-ignored) mapping name → temporary password —
+handle it like the credentials it is, and delete it once distributed.
+
 ## Development
 Create a `.dev.vars` file (git-ignored) in the project root with:
 ```
