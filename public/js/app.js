@@ -1258,6 +1258,96 @@ document.getElementById('create-entity-form').addEventListener('submit', async f
   loadAdminData();
 });
 
+// Same alphabet reset-password.js uses server-side (avoids visually ambiguous characters like
+// 0/O and 1/l/I, since these are often relayed by reading them aloud or over text/email).
+const TEMP_PASSWORD_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+function generateTempPasswordClient(length = 12) {
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, b => TEMP_PASSWORD_ALPHABET[b % TEMP_PASSWORD_ALPHABET.length]).join('');
+}
+
+// Bulk import entities (admin). Runs entirely in the admin's own already-authenticated browser
+// session, one POST /api/entities per name, reusing the exact same validation/uniqueness rules
+// as creating one by hand instead of a separate code path that could drift from them.
+document.getElementById('bulk-import-form').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideAlert('bulk-import-msg');
+  const btn = this.querySelector('button[type=submit]');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span> Importing…';
+  document.getElementById('bulk-import-results').innerHTML = '';
+
+  const type = document.getElementById('bulk-import-type').value;
+  const names = document.getElementById('bulk-import-names').value
+    .split('\n')
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  if (!names.length) {
+    showAlert('bulk-import-msg', 'Enter at least one name');
+    btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-file-import me-1"></i>Import';
+    return;
+  }
+
+  const results = [];
+  for (const name of names) {
+    const password = generateTempPasswordClient();
+    const { ok, status, data } = await apiFetch('/api/entities', {
+      method: 'POST',
+      body: JSON.stringify({ name, type, password }),
+    });
+    if (ok) {
+      results.push({ name, status: 'created', password });
+    } else if (status === 409) {
+      results.push({ name, status: 'already existed', password: '' });
+    } else {
+      results.push({ name, status: `failed: ${data.error || status}`, password: '' });
+    }
+  }
+
+  btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-file-import me-1"></i>Import';
+
+  const created = results.filter(r => r.status === 'created').length;
+  const skipped = results.filter(r => r.status === 'already existed').length;
+  const failed = results.length - created - skipped;
+  showAlert('bulk-import-msg', `${created} created, ${skipped} already existed, ${failed} failed.`, failed ? 'danger' : 'success');
+
+  const resultsEl = document.getElementById('bulk-import-results');
+  resultsEl.innerHTML = `
+    <div class="table-responsive">
+      <table class="table table-sm">
+        <thead><tr><th>Name</th><th>Status</th><th>Temp Password</th></tr></thead>
+        <tbody>
+          ${results.map(r => `<tr>
+            <td>${escHtml(r.name)}</td>
+            <td>${escHtml(r.status)}</td>
+            <td>${r.password ? `<code>${escHtml(r.password)}</code>` : ''}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <button type="button" class="btn btn-sm btn-outline-secondary" id="bulk-import-download-csv">
+      <i class="fa-solid fa-download me-1"></i>Download CSV
+    </button>
+  `;
+
+  document.getElementById('bulk-import-download-csv').addEventListener('click', () => {
+    const csv = ['name,status,temp_password']
+      .concat(results.map(r => [r.name, r.status, r.password].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `entity-import-${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  this.reset();
+  loadAdminData();
+});
+
 // Create event (admin)
 document.getElementById('admin-create-event-form').addEventListener('submit', async function (e) {
   e.preventDefault();
