@@ -434,7 +434,10 @@ async function renderCalendar() {
     function topHeightPx(start, end) {
       const startMin = start.getHours() * 60 + start.getMinutes();
       const endMin   = end.getHours() * 60 + end.getMinutes();
-      const duration = Math.max(endMin - startMin, 15); // min 15-min visual height for readability
+      // Min 30-min visual height: shorter than that there's no room for title + location +
+      // entity even at the smallest legible font size. This only affects the rendered block
+      // size, never the event's actual stored duration.
+      const duration = Math.max(endMin - startMin, 30);
       return { topPx: startMin * (HOUR_H / 60), heightPx: duration * (HOUR_H / 60) };
     }
 
@@ -454,6 +457,7 @@ async function renderCalendar() {
         <div class="ev-title">${escHtml(ev.title)}</div>
         <div class="ev-location">${escHtml(ev.location_name || '')}</div>
         <div class="ev-entity">${escHtml(ev.entity_name || '')}</div>
+        ${ev.description ? `<div class="ev-desc">${escHtml(truncateText(ev.description, 120))}</div>` : ''}
       </div>`;
     });
 
@@ -628,6 +632,14 @@ function escHtml(str) {
   return String(str || '')
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// Caps how much of a description ever lands in a calendar tile -- CSS clips it visually once the
+// block runs out of room, but the full text was still sitting in the DOM (bloats markup, and
+// screen readers would read the whole thing regardless of what's visibly clipped).
+function truncateText(str, max) {
+  const s = String(str || '');
+  return s.length > max ? s.slice(0, max).trimEnd() + '…' : s;
 }
 
 // Lists the events collapsed into an overflow tile; clicking one opens the normal event modal.
@@ -945,6 +957,7 @@ function onEntityLogin() {
 
 function unlockEntityFeatures() {
   document.getElementById('create-event-section').classList.remove('d-none');
+  document.getElementById('my-events-section').classList.remove('d-none');
   // Populate locations for entity create-event form
   (async () => {
     try {
@@ -958,6 +971,44 @@ function unlockEntityFeatures() {
       // ignore
     }
   })();
+  loadMyEvents();
+}
+
+// An entity's own events (past and upcoming, most recent first) with edit/delete -- previously
+// entities could only create events, never see or manage the ones they'd already posted, and had
+// to ask an admin to fix a typo or cancel something.
+async function loadMyEvents() {
+  const listEl = document.getElementById('my-events-list');
+  if (!state.loggedInEntity) return;
+
+  const { ok, data } = await apiFetch(`/api/events?entity_id=${state.loggedInEntity.id}`);
+  const events = ok ? (data.events || []) : [];
+
+  if (!events.length) {
+    listEl.innerHTML = '<p class="text-muted small">No events yet.</p>';
+    return;
+  }
+
+  listEl.innerHTML = events.map(ev => `
+    <div class="event-list-item">
+      <div class="ev-info">
+        <div class="ev-title-txt">${escHtml(ev.title)}</div>
+        <div class="ev-meta-txt">${new Date(ev.start_datetime).toLocaleString()}${ev.location_name ? ' · ' + escHtml(ev.location_name) : ''}</div>
+      </div>
+      <button class="btn btn-sm btn-outline-secondary me-1" data-edit-event="${ev.id}" title="Edit event">
+        <i class="fa-solid fa-pen"></i>
+      </button>
+      <button class="btn btn-sm btn-outline-danger" data-delete-event="${ev.id}">
+        <i class="fa-solid fa-trash"></i>
+      </button>
+    </div>`).join('');
+
+  listEl.querySelectorAll('[data-edit-event]').forEach(btn => {
+    btn.addEventListener('click', () => openEditEventModal(parseInt(btn.dataset.editEvent)));
+  });
+  listEl.querySelectorAll('[data-delete-event]').forEach(btn => {
+    btn.addEventListener('click', () => deleteEventById(parseInt(btn.dataset.deleteEvent)));
+  });
 }
 
 // Forces the entity to set a new password before the rest of the page unlocks. Used after
@@ -979,6 +1030,7 @@ document.getElementById('btn-entity-logout').addEventListener('click', () => {
   state.loggedInEntity = null;
   document.getElementById('entity-login-banner').classList.add('d-none');
   document.getElementById('create-event-section').classList.add('d-none');
+  document.getElementById('my-events-section').classList.add('d-none');
 });
 
 document.getElementById('btn-change-pw').addEventListener('click', () => {
@@ -1272,7 +1324,7 @@ async function loadAdminEvents() {
       </div>`).join('');
 
     evList.querySelectorAll('[data-delete-event]').forEach(btn => {
-      btn.addEventListener('click', () => adminDeleteEvent(parseInt(btn.dataset.deleteEvent)));
+      btn.addEventListener('click', () => deleteEventById(parseInt(btn.dataset.deleteEvent)));
     });
     evList.querySelectorAll('[data-edit-event]').forEach(btn => {
       btn.addEventListener('click', () => openEditEventModal(parseInt(btn.dataset.editEvent)));
@@ -1635,12 +1687,22 @@ document.getElementById('btn-copy-reset-pw').addEventListener('click', async () 
   setTimeout(() => hideAlert('reset-pw-copied-msg'), 2000);
 });
 
-// Delete event
-async function adminDeleteEvent(id) {
+// Refreshes whichever event list(s) are currently relevant -- admin and entity logins are
+// mutually exclusive in this app, so at most one of these actually does anything, but the edit
+// modal and delete button are shared between the admin Events list and an entity's My Events
+// list, and don't know which context they were opened from.
+function refreshEventLists() {
+  if (state.loggedInEntity) loadMyEvents();
+  if (state.adminToken) loadAdminEvents();
+}
+
+// Delete event (shared by the admin Events list and an entity's own My Events list -- the API
+// already permits either an admin or the owning entity)
+async function deleteEventById(id) {
   if (!confirm('Delete this event?')) return;
   const { ok, data } = await apiFetch(`/api/events/${id}`, { method: 'DELETE' });
   if (!ok) { alert(data.error || 'Failed to delete event'); return; }
-  loadAdminEvents();
+  refreshEventLists();
 }
 
 // Edit event (title / description / location / start / end – entity can't be changed)
@@ -1713,7 +1775,7 @@ document.getElementById('edit-event-form').addEventListener('submit', async func
 
   if (!ok) { showAlert('edit-event-msg', data.error || 'Failed to update event'); return; }
   bootstrap.Modal.getInstance(document.getElementById('editEventModal')).hide();
-  loadAdminEvents();
+  refreshEventLists();
 });
 
 /* =============================================================

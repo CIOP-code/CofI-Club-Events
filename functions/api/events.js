@@ -1,6 +1,7 @@
 /**
- * GET  /api/events?start=&end=&q=   – list events (optional date range + text search filters)
- * POST /api/events                   – create a new event (requires entity or admin auth)
+ * GET  /api/events?start=&end=&q=&entity_id=   – list events (optional date range, text search,
+ *                                                 and entity filters)
+ * POST /api/events                              – create a new event (requires entity or admin auth)
  */
 import { findLocationConflict, locationConflictMessage } from '../utils/scheduling.js';
 
@@ -16,6 +17,7 @@ export async function onRequestGet({ env, request }) {
   const start = url.searchParams.get('start');
   const end   = url.searchParams.get('end');
   const q     = url.searchParams.get('q');
+  const entityId = url.searchParams.get('entity_id');
 
   let query = `
     SELECT e.*, en.name AS entity_name, en.type AS entity_type, l.name AS location_name
@@ -40,8 +42,13 @@ export async function onRequestGet({ env, request }) {
     params.push(like, like, like);
   }
 
+  if (entityId) {
+    conditions.push(`e.entity_id = ?`);
+    params.push(entityId);
+  }
+
   if (conditions.length) query += ` WHERE ` + conditions.join(' AND ');
-  query += ` ORDER BY e.start_datetime ASC`;
+  query += entityId ? ` ORDER BY e.start_datetime DESC` : ` ORDER BY e.start_datetime ASC`;
   if (q) query += ` LIMIT 50`;
 
   try {

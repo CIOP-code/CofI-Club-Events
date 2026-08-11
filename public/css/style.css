@@ -560,6 +560,9 @@ body {
 .cal-event .ev-title { font-weight: 600; }
 .cal-event .ev-entity { opacity: .85; font-size: .66rem; }
 .cal-event .ev-location { opacity: .9; font-size: .68rem; margin-top: 2px; }
+/* Only actually visible when the block is tall enough -- .cal-event's overflow:hidden clips it
+   otherwise, so short events aren't crowded and tall ones get the extra context for free. */
+.cal-event .ev-desc { opacity: .8; font-size: .64rem; margin-top: 2px; }
 
 .cal-event-overflow {
   display: flex;
