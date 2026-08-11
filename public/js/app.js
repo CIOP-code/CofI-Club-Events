@@ -18,7 +18,7 @@ const state = {
   forcedPasswordChange: false,  // true while the change-pw modal is a mandatory, non-dismissible flow
   adminEventsView: 'week',            // 'week' | 'month' — browsable range for the admin Events list
   adminEventsAnchorDate: new Date(),  // reference date for that range, so past events are reachable too
-  entitiesView: 'grid',               // 'grid' | 'list' — icon tiles vs. compact rows on the Entities page
+  entitiesView: 'list',               // 'grid' | 'list' — icon tiles vs. compact rows on the Entities page
 };
 
 /* Ensure CSS variable for calendar header height matches the rendered size.
@@ -551,6 +551,10 @@ async function renderCalendar() {
   if (!state._hasScrolledToNow) {
     const nowEl = grid.querySelector('.now-line');
     const container = findVerticalScrollContainer(grid) || document.documentElement;
+    const dayHeaderH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--day-header-h')) || 52;
+    // Midnight-6am is rarely where anything's happening, so never default to showing it — either
+    // center on "now" (if later than 6am) or fall back to 6am, but don't scroll any earlier than that.
+    const minScrollTop = 6 * HOUR_H + dayHeaderH;
     if (nowEl && container) {
       const nowRect = nowEl.getBoundingClientRect();
       const contRect = container.getBoundingClientRect();
@@ -560,13 +564,11 @@ async function renderCalendar() {
       const margin = 24;
       const delta = nowRect.top - (contRect.top + headerH + margin);
       // Adjust scrollTop by delta (works for both documentElement and scrollable container)
-      container.scrollTop = (container.scrollTop || 0) + delta;
+      container.scrollTop = Math.max((container.scrollTop || 0) + delta, minScrollTop);
     } else {
-      // Fall back to scrolling to 7am (previous behavior)
-      const dayHeaderH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--day-header-h')) || 52;
-      const scrollTo = 7 * HOUR_H + dayHeaderH; // align so 7am sits below headers
-      const container = findVerticalScrollContainer(grid) || document.documentElement;
-      container.scrollTop = scrollTo;
+      // Fall back to 6am when there's no "now" line to center on (e.g. viewing a week/day that
+      // doesn't include today).
+      container.scrollTop = minScrollTop;
     }
     state._hasScrolledToNow = true;
   }
@@ -1128,10 +1130,22 @@ async function loadAdminData() {
   const { ok, data } = await apiFetch('/api/entities');
   const entities = ok ? (data.entities || []) : [];
 
-  // Populate entity select
+  // Populate entity select, grouped by type instead of one flat alphabetical list -- with 50+
+  // entities now, scanning for one by scrolling a single giant list got unwieldy.
   const sel = document.getElementById('adm-ev-entity');
+  const ENTITY_TYPE_ORDER = ['club', 'department', 'office', 'organization', 'program'];
+  const groupedEntities = ENTITY_TYPE_ORDER
+    .map(type => ({ type, label: TYPE_LABELS[type] || type, items: entities.filter(en => en.type === type) }))
+    .filter(g => g.items.length);
+  const knownTypes = new Set(ENTITY_TYPE_ORDER);
+  const otherEntities = entities.filter(en => !knownTypes.has(en.type));
+  if (otherEntities.length) groupedEntities.push({ type: 'other', label: 'Other', items: otherEntities });
+
   sel.innerHTML = `<option value="">– select entity –</option>` +
-    entities.map(en => `<option value="${en.id}">${escHtml(en.name)}</option>`).join('');
+    groupedEntities.map(g => `<optgroup label="${escHtml(g.label)}s">` +
+      g.items.map(en => `<option value="${en.id}">${escHtml(en.name)}</option>`).join('') +
+      `</optgroup>`
+    ).join('');
 
   // Populate locations for admin event form
   try {

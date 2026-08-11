@@ -125,24 +125,24 @@
               </select>
               <span class="result-count" id="entities-count"></span>
               <div class="view-toggle entities-view-toggle">
-                <button class="cal-nav-btn active" id="entities-view-grid" title="Icon grid view">
+                <button class="cal-nav-btn" id="entities-view-grid" title="Icon grid view">
                   <i class="fa-solid fa-grip"></i>
                 </button>
-                <button class="cal-nav-btn" id="entities-view-list" title="List view">
+                <button class="cal-nav-btn active" id="entities-view-list" title="List view">
                   <i class="fa-solid fa-list"></i>
                 </button>
               </div>
             </div>
 
             <!-- Entities grid -->
-            <div class="entities-grid" id="entities-grid">
+            <div class="entities-grid d-none" id="entities-grid"></div>
+            <!-- Entities list (default view) -->
+            <div class="entities-list" id="entities-list">
               <div class="text-center text-muted py-5 w-100">
                 <i class="fa-solid fa-spinner fa-spin fa-2x mb-2"></i>
                 <p>Loading entities…</p>
               </div>
             </div>
-            <!-- Entities list (alternative compact view, toggled via JS) -->
-            <div class="entities-list d-none" id="entities-list"></div>
 
             <!-- Create event form (shown after entity login) -->
             <div id="create-event-section" class="d-none p-3">
