@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS events (
   start_datetime TEXT    NOT NULL,
   end_datetime   TEXT    NOT NULL,
   entity_id      INTEGER NOT NULL,
+  event_type     TEXT    NOT NULL DEFAULT 'other' CHECK (event_type IN ('meeting', 'social', 'academic', 'athletic', 'fundraiser', 'performance', 'other')),
   created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (entity_id) REFERENCES entities(id) ON DELETE CASCADE,
   FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE SET NULL
@@ -87,3 +88,9 @@ CREATE INDEX IF NOT EXISTS idx_login_attempts_lookup ON login_attempts(ip, endpo
 --   DROP TABLE entities;
 --   ALTER TABLE entities_new RENAME TO entities;
 --   PRAGMA foreign_keys=ON;
+
+-- Migration to add event_type to an already-migrated events table. Unlike the entities.type
+-- migration above, this one's a plain ADD COLUMN -- SQLite allows a CHECK constraint on a newly
+-- added column as long as it doesn't reference other columns, no table rebuild needed. Existing
+-- rows get the DEFAULT ('other') applied automatically.
+--   ALTER TABLE events ADD COLUMN event_type TEXT NOT NULL DEFAULT 'other' CHECK (event_type IN ('meeting', 'social', 'academic', 'athletic', 'fundraiser', 'performance', 'other'));

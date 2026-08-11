@@ -257,6 +257,16 @@ const TYPE_LABELS = {
   program: 'Program',
 };
 
+const EVENT_TYPE_LABELS = {
+  meeting: 'Meeting',
+  social: 'Social',
+  academic: 'Academic',
+  athletic: 'Athletic',
+  fundraiser: 'Fundraiser',
+  performance: 'Performance',
+  other: 'Other',
+};
+
 /** Show an inline alert */
 function showAlert(elId, msg, type = 'danger') {
   const el = document.getElementById(elId);
@@ -1107,6 +1117,7 @@ document.getElementById('create-event-form').addEventListener('submit', async fu
   const payload = {
     title:          document.getElementById('ev-title').value.trim(),
     description:    document.getElementById('ev-desc').value.trim(),
+    event_type:     document.getElementById('ev-type').value,
     location_id,
     start_datetime: document.getElementById('ev-start').value,
     end_datetime:   document.getElementById('ev-end').value,
@@ -1535,6 +1546,62 @@ document.getElementById('bulk-import-locations-form').addEventListener('submit',
   loadAdminData();
 });
 
+// Export a PDF list of events in a date range, optionally filtered to one type -- e.g. a
+// semester's worth of events for a print handout, using jsPDF + its autotable plugin (loaded via
+// <script> tags in index.html/404.html, before app.js).
+document.getElementById('export-pdf-form').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideAlert('export-pdf-msg');
+  const btn = this.querySelector('button[type=submit]');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span> Generating…';
+
+  const startDate = document.getElementById('export-pdf-start').value; // "YYYY-MM-DD"
+  const endDate = document.getElementById('export-pdf-end').value;
+  const eventType = document.getElementById('export-pdf-type').value;
+
+  let url = `/api/events?start=${startDate}T00:00:00&end=${endDate}T23:59:59`;
+  if (eventType) url += `&event_type=${eventType}`;
+
+  const { ok, data } = await apiFetch(url);
+  btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-file-pdf me-1"></i>Download PDF';
+
+  if (!ok) { showAlert('export-pdf-msg', data.error || 'Failed to load events'); return; }
+  const events = data.events || [];
+  if (!events.length) { showAlert('export-pdf-msg', 'No events found in that range'); return; }
+
+  generateEventsPdf(events, { startDate, endDate, eventType });
+});
+
+function generateEventsPdf(events, { startDate, endDate, eventType }) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+
+  doc.setFontSize(16);
+  doc.text('Campus Events — College of Idaho', 14, 18);
+  doc.setFontSize(10);
+  doc.setTextColor(100);
+  const rangeLabel = `${startDate} to ${endDate}` + (eventType ? ` · ${EVENT_TYPE_LABELS[eventType] || eventType}` : ' · All types');
+  doc.text(rangeLabel, 14, 25);
+
+  const rows = events.map(ev => [
+    new Date(ev.start_datetime).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }),
+    ev.title,
+    ev.entity_name || '',
+    EVENT_TYPE_LABELS[ev.event_type] || ev.event_type || '',
+    ev.location_name || '',
+  ]);
+
+  doc.autoTable({
+    startY: 30,
+    head: [['Date/Time', 'Title', 'Entity', 'Type', 'Location']],
+    body: rows,
+    styles: { fontSize: 9 },
+    headStyles: { fillColor: [83, 56, 96] }, // --coi-blue
+  });
+
+  doc.save(`campus-events-${startDate}-to-${endDate}.pdf`);
+}
+
 // Create event (admin)
 document.getElementById('admin-create-event-form').addEventListener('submit', async function (e) {
   e.preventDefault();
@@ -1571,6 +1638,7 @@ document.getElementById('admin-create-event-form').addEventListener('submit', as
       entity_id:      parseInt(document.getElementById('adm-ev-entity').value),
       title:          document.getElementById('adm-ev-title').value.trim(),
       description:    document.getElementById('adm-ev-desc').value.trim(),
+      event_type:     document.getElementById('adm-ev-type').value,
       location_id,
       start_datetime: adm_start,
       end_datetime:   adm_end,
@@ -1715,6 +1783,7 @@ async function openEditEventModal(id) {
   document.getElementById('edit-ev-id').value = ev.id;
   document.getElementById('edit-ev-title').value = ev.title;
   document.getElementById('edit-ev-desc').value = ev.description || '';
+  document.getElementById('edit-ev-type').value = ev.event_type || 'other';
   document.getElementById('edit-ev-start').value = formatDateTimeLocal(new Date(ev.start_datetime));
   document.getElementById('edit-ev-end').value = formatDateTimeLocal(new Date(ev.end_datetime));
   document.getElementById('edit-ev-new-location').value = '';
@@ -1765,6 +1834,7 @@ document.getElementById('edit-event-form').addEventListener('submit', async func
     body: JSON.stringify({
       title:          document.getElementById('edit-ev-title').value.trim(),
       description:    document.getElementById('edit-ev-desc').value.trim(),
+      event_type:     document.getElementById('edit-ev-type').value,
       location_id,
       start_datetime: edit_start,
       end_datetime:   edit_end,
@@ -1834,8 +1904,8 @@ const ROADMAP_PHASES = [
         desc: 'A small month-at-a-glance widget shading days by how many events they have, for quickly spotting busy days.' },
       { title: 'Jump-to-Day', status: 'planned',
         desc: 'A date picker that jumps the week/day view straight to a chosen date instead of paging one day/week at a time.' },
-      { title: 'Tags / categories', status: 'planned',
-        desc: 'Free-form or curated tags on events (e.g. "Fundraiser", "Athletics") independent of entity type, with a tag filter alongside the existing type filter.' },
+      { title: 'Tags / categories', status: 'shipped',
+        desc: 'Shipped in a simpler form: a single event_type per event (Meeting/Social/Academic/Athletic/Fundraiser/Performance/Other), filterable via the API and used in the admin PDF export. Full free-form/multi-tag support is still a possible future upgrade if the fixed list ever proves too narrow.' },
       { title: 'Subscribable filtered feed (RSS/iCal)', status: 'planned',
         desc: 'A live-updating feed URL reflecting the same filters as the Entities page (e.g. "just Chess Club"), so a calendar app stays in sync automatically instead of a one-time .ics download.' },
     ],

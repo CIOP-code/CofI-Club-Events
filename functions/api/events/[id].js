@@ -5,6 +5,8 @@
  */
 import { findLocationConflict, locationConflictMessage } from '../../utils/scheduling.js';
 
+const EVENT_TYPES = ['meeting', 'social', 'academic', 'athletic', 'fundraiser', 'performance', 'other'];
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -45,7 +47,7 @@ export async function onRequestPut({ env, request, params, data }) {
   let body;
   try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
 
-  const { title, description, start_datetime, end_datetime } = body;
+  const { title, description, start_datetime, end_datetime, event_type } = body;
   // location_id is nullable (an event can have no location), so a request that explicitly sends
   // location_id: null means "clear it" and must be distinguished from a field the caller omitted.
   const nextLocationId = 'location_id' in body ? body.location_id : event.location_id;
@@ -54,6 +56,9 @@ export async function onRequestPut({ env, request, params, data }) {
 
   if (new Date(nextEnd) <= new Date(nextStart)) {
     return json({ error: 'end_datetime must be after start_datetime' }, 400);
+  }
+  if (event_type && !EVENT_TYPES.includes(event_type)) {
+    return json({ error: `event_type must be one of: ${EVENT_TYPES.join(', ')}` }, 400);
   }
 
   try {
@@ -66,13 +71,14 @@ export async function onRequestPut({ env, request, params, data }) {
     if (conflict) return json({ error: locationConflictMessage(conflict) }, 409);
 
     await env.DB.prepare(
-      `UPDATE events SET title=?, description=?, location_id=?, start_datetime=?, end_datetime=? WHERE id = ?`
+      `UPDATE events SET title=?, description=?, location_id=?, start_datetime=?, end_datetime=?, event_type=? WHERE id = ?`
     ).bind(
       title ?? event.title,
       description ?? event.description,
       nextLocationId,
       nextStart,
       nextEnd,
+      event_type ?? event.event_type,
       id
     ).run();
     return json({ message: 'Event updated' });

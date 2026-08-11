@@ -158,6 +158,18 @@
                     <textarea class="form-control" id="ev-desc" rows="3"></textarea>
                   </div>
                   <div class="mb-3">
+                    <label class="form-label" for="ev-type">Event Type</label>
+                    <select class="form-select" id="ev-type">
+                      <option value="meeting">Meeting</option>
+                      <option value="social">Social</option>
+                      <option value="academic">Academic</option>
+                      <option value="athletic">Athletic</option>
+                      <option value="fundraiser">Fundraiser</option>
+                      <option value="performance">Performance</option>
+                      <option value="other" selected>Other</option>
+                    </select>
+                  </div>
+                  <div class="mb-3">
                     <label class="form-label" for="ev-location">Location *</label>
                     <select class="form-select" id="ev-location"></select>
                     <div class="form-text">Or create a new location below if it doesn't exist.</div>
@@ -290,6 +302,18 @@
                         <textarea class="form-control" id="adm-ev-desc" rows="2"></textarea>
                       </div>
                       <div class="mb-2">
+                        <label class="form-label" for="adm-ev-type">Event Type</label>
+                        <select class="form-select" id="adm-ev-type">
+                          <option value="meeting">Meeting</option>
+                          <option value="social">Social</option>
+                          <option value="academic">Academic</option>
+                          <option value="athletic">Athletic</option>
+                          <option value="fundraiser">Fundraiser</option>
+                          <option value="performance">Performance</option>
+                          <option value="other" selected>Other</option>
+                        </select>
+                      </div>
+                      <div class="mb-2">
                         <label class="form-label" for="adm-ev-location">Location</label>
                         <select class="form-select" id="adm-ev-location"></select>
                         <div class="form-text">Or add a new location below.</div>
@@ -358,6 +382,43 @@
                       </button>
                     </form>
                     <div id="bulk-import-locations-results" class="mt-3"></div>
+                  </div>
+                </div>
+
+                <!-- Export Events PDF -->
+                <div class="col-12 col-md-6">
+                  <div class="section-card">
+                    <h4><i class="fa-solid fa-file-pdf me-2"></i>Export Events PDF</h4>
+                    <p class="text-muted small">Generates a PDF list of events in a date range — for a whole semester, or any custom range — optionally filtered to one event type.</p>
+                    <form id="export-pdf-form">
+                      <div class="row g-2 mb-2">
+                        <div class="col-sm-6">
+                          <label class="form-label" for="export-pdf-start">From *</label>
+                          <input type="date" class="form-control" id="export-pdf-start" required />
+                        </div>
+                        <div class="col-sm-6">
+                          <label class="form-label" for="export-pdf-end">To *</label>
+                          <input type="date" class="form-control" id="export-pdf-end" required />
+                        </div>
+                      </div>
+                      <div class="mb-2">
+                        <label class="form-label" for="export-pdf-type">Event Type</label>
+                        <select class="form-select" id="export-pdf-type">
+                          <option value="">All types</option>
+                          <option value="meeting">Meeting</option>
+                          <option value="social">Social</option>
+                          <option value="academic">Academic</option>
+                          <option value="athletic">Athletic</option>
+                          <option value="fundraiser">Fundraiser</option>
+                          <option value="performance">Performance</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+                      <div id="export-pdf-msg" class="alert-inline d-none mb-2"></div>
+                      <button type="submit" class="btn-coi-secondary mt-1">
+                        <i class="fa-solid fa-file-pdf me-1"></i>Download PDF
+                      </button>
+                    </form>
                   </div>
                 </div>
 
@@ -708,6 +769,18 @@
             <textarea class="form-control" id="edit-ev-desc" rows="2"></textarea>
           </div>
           <div class="mb-2">
+            <label class="form-label" for="edit-ev-type">Event Type</label>
+            <select class="form-select" id="edit-ev-type">
+              <option value="meeting">Meeting</option>
+              <option value="social">Social</option>
+              <option value="academic">Academic</option>
+              <option value="athletic">Athletic</option>
+              <option value="fundraiser">Fundraiser</option>
+              <option value="performance">Performance</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="mb-2">
             <label class="form-label" for="edit-ev-location">Location</label>
             <select class="form-select" id="edit-ev-location"></select>
             <div class="form-text">Or add a new location below.</div>
@@ -736,6 +809,12 @@
 <!-- Bootstrap 5 JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
         integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+<!-- jsPDF + autotable plugin, for the admin "Export Events PDF" feature. Load order matters:
+     autotable extends jsPDF's prototype, so it must load after jspdf itself. -->
+<script src="https://cdn.jsdelivr.net/npm/jspdf@4.2.1/dist/jspdf.umd.min.js"
+        integrity="sha384-qovJwSBbRDPP5cEjCp8S0UP66wrvnjaa60XMOGzTNanrThcrGfXfnZkvgY8N1KT3" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@5.0.8/dist/jspdf.plugin.autotable.min.js"
+        integrity="sha384-5jk55M0XWoAw7LyhlXJe19ErOr3doBAPzxw9vahPFbvolqWa2yDk4fhHa2zuYeOa" crossorigin="anonymous"></script>
 <!-- App JS -->
 <script src="/js/app.js"></script>
 </body>

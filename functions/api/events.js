@@ -1,9 +1,11 @@
 /**
- * GET  /api/events?start=&end=&q=&entity_id=   – list events (optional date range, text search,
- *                                                 and entity filters)
- * POST /api/events                              – create a new event (requires entity or admin auth)
+ * GET  /api/events?start=&end=&q=&entity_id=&event_type=   – list events (optional date range,
+ *                                                             text search, entity, and type filters)
+ * POST /api/events                                          – create a new event (requires entity or admin auth)
  */
 import { findLocationConflict, locationConflictMessage } from '../utils/scheduling.js';
+
+const EVENT_TYPES = ['meeting', 'social', 'academic', 'athletic', 'fundraiser', 'performance', 'other'];
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -18,6 +20,7 @@ export async function onRequestGet({ env, request }) {
   const end   = url.searchParams.get('end');
   const q     = url.searchParams.get('q');
   const entityId = url.searchParams.get('entity_id');
+  const eventType = url.searchParams.get('event_type');
 
   let query = `
     SELECT e.*, en.name AS entity_name, en.type AS entity_type, l.name AS location_name
@@ -45,6 +48,11 @@ export async function onRequestGet({ env, request }) {
   if (entityId) {
     conditions.push(`e.entity_id = ?`);
     params.push(entityId);
+  }
+
+  if (eventType) {
+    conditions.push(`e.event_type = ?`);
+    params.push(eventType);
   }
 
   if (conditions.length) query += ` WHERE ` + conditions.join(' AND ');
@@ -81,6 +89,11 @@ export async function onRequestPost({ env, request, data }) {
     return json({ error: 'end_datetime must be after start_datetime' }, 400);
   }
 
+  const event_type = body.event_type || 'other';
+  if (!EVENT_TYPES.includes(event_type)) {
+    return json({ error: `event_type must be one of: ${EVENT_TYPES.join(', ')}` }, 400);
+  }
+
   // Admin can specify any entity_id; entity users use their own entity_id
   const entity_id = user.type === 'admin' ? (body.entity_id || 0) : user.entity_id;
   if (!entity_id) {
@@ -92,9 +105,9 @@ export async function onRequestPost({ env, request, data }) {
     if (conflict) return json({ error: locationConflictMessage(conflict) }, 409);
 
     const result = await env.DB.prepare(
-      `INSERT INTO events (title, description, location_id, start_datetime, end_datetime, entity_id)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    ).bind(title, description || '', location_id || null, start_datetime, end_datetime, entity_id).run();
+      `INSERT INTO events (title, description, location_id, start_datetime, end_datetime, entity_id, event_type)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(title, description || '', location_id || null, start_datetime, end_datetime, entity_id, event_type).run();
 
     return json({ id: result.meta.last_row_id, message: 'Event created' }, 201);
   } catch (err) {

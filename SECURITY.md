@@ -107,12 +107,14 @@ Set globally via `public/_headers` (applies to both static pages and `/api/*` Fu
 
 - **No server-side npm dependencies** — the backend is plain JS using only Web Crypto (built into
   the Workers runtime) and D1's own driver. `wrangler` is a dev-only tool, never shipped.
-- **Frontend CDN assets are pinned with Subresource Integrity** (`integrity="sha384-..."` on the
-  Bootstrap and Font Awesome `<link>`/`<script>` tags in `public/index.html` and `public/404.html`).
+- **Frontend CDN assets are pinned with Subresource Integrity** (`integrity="sha384-..."` on every
+  `<link>`/`<script>` tag pulling from a CDN in `public/index.html` and `public/404.html`: Bootstrap,
+  Font Awesome, and jsPDF + its autotable plugin for the admin PDF export feature).
   If jsdelivr ever served something other than the exact published bytes for that version — a
   compromised CDN, a MITM without SRI — the browser refuses to run it rather than executing it
   silently. Font Awesome was moved from cdnjs to jsdelivr's npm mirror specifically so its hash
-  could be verified directly against the published npm package rather than trusted blind.
+  could be verified directly against the published npm package rather than trusted blind; every
+  hash in this repo is computed the same way — from the real npm-published file, not guessed.
 - Google Fonts is not pinned with SRI — that's a deliberate omission, not an oversight: Google
   Fonts' CSS response is intentionally negotiated per user-agent (different `@font-face` rules for
   different browsers), so it has no single fixed hash to pin.
