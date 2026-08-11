@@ -45,7 +45,7 @@ individual events easier to find, share, and get onto someone's own calendar.
   paging one day/week at a time.
 - ~~**Tags / categories.**~~ *(shipped, in a simpler form)* Events now have a single `event_type`
   (Meeting/Social/Academic/Athletic/Fundraiser/Performance/Other), filterable via the API and used
-  in the admin PDF export. Full free-form/multi-tag support (an event tagged with several
+  in the PDF export (available to everyone, not just admins). Full free-form/multi-tag support (an event tagged with several
   categories at once) is still a possible future upgrade if the fixed list ever proves too narrow.
 - **Subscribable filtered feed (RSS/iCal).** A live-updating feed URL reflecting the same filters
   as the Entities page (e.g. "just Chess Club"), so a calendar app stays in sync automatically

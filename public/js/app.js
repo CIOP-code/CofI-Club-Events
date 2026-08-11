@@ -1572,6 +1572,37 @@ document.getElementById('export-pdf-form').addEventListener('submit', async func
   generateEventsPdf(events, { startDate, endDate, eventType });
 });
 
+// Same export, available to everyone (no login required) via a toolbar button on the calendar.
+document.getElementById('btn-export-pdf').addEventListener('click', () => {
+  hideAlert('pub-export-pdf-msg');
+  document.getElementById('pub-export-pdf-form').reset();
+  new bootstrap.Modal(document.getElementById('exportPdfModal')).show();
+});
+
+document.getElementById('pub-export-pdf-form').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideAlert('pub-export-pdf-msg');
+  const btn = this.querySelector('button[type=submit]');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span> Generating…';
+
+  const startDate = document.getElementById('pub-export-pdf-start').value; // "YYYY-MM-DD"
+  const endDate = document.getElementById('pub-export-pdf-end').value;
+  const eventType = document.getElementById('pub-export-pdf-type').value;
+
+  let url = `/api/events?start=${startDate}T00:00:00&end=${endDate}T23:59:59`;
+  if (eventType) url += `&event_type=${eventType}`;
+
+  const { ok, data } = await apiFetch(url);
+  btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-file-pdf me-1"></i>Download PDF';
+
+  if (!ok) { showAlert('pub-export-pdf-msg', data.error || 'Failed to load events'); return; }
+  const events = data.events || [];
+  if (!events.length) { showAlert('pub-export-pdf-msg', 'No events found in that range'); return; }
+
+  generateEventsPdf(events, { startDate, endDate, eventType });
+  bootstrap.Modal.getInstance(document.getElementById('exportPdfModal'))?.hide();
+});
+
 function generateEventsPdf(events, { startDate, endDate, eventType }) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
@@ -1905,7 +1936,7 @@ const ROADMAP_PHASES = [
       { title: 'Jump-to-Day', status: 'planned',
         desc: 'A date picker that jumps the week/day view straight to a chosen date instead of paging one day/week at a time.' },
       { title: 'Tags / categories', status: 'shipped',
-        desc: 'Shipped in a simpler form: a single event_type per event (Meeting/Social/Academic/Athletic/Fundraiser/Performance/Other), filterable via the API and used in the admin PDF export. Full free-form/multi-tag support is still a possible future upgrade if the fixed list ever proves too narrow.' },
+        desc: 'Shipped in a simpler form: a single event_type per event (Meeting/Social/Academic/Athletic/Fundraiser/Performance/Other), filterable via the API and used in the PDF export (available to everyone, not just admins). Full free-form/multi-tag support is still a possible future upgrade if the fixed list ever proves too narrow.' },
       { title: 'Subscribable filtered feed (RSS/iCal)', status: 'planned',
         desc: 'A live-updating feed URL reflecting the same filters as the Entities page (e.g. "just Chess Club"), so a calendar app stays in sync automatically instead of a one-time .ics download.' },
     ],

@@ -109,7 +109,7 @@ Set globally via `public/_headers` (applies to both static pages and `/api/*` Fu
   the Workers runtime) and D1's own driver. `wrangler` is a dev-only tool, never shipped.
 - **Frontend CDN assets are pinned with Subresource Integrity** (`integrity="sha384-..."` on every
   `<link>`/`<script>` tag pulling from a CDN in `public/index.html` and `public/404.html`: Bootstrap,
-  Font Awesome, and jsPDF + its autotable plugin for the admin PDF export feature).
+  Font Awesome, and jsPDF + its autotable plugin for the events PDF export feature).
   If jsdelivr ever served something other than the exact published bytes for that version — a
   compromised CDN, a MITM without SRI — the browser refuses to run it rather than executing it
   silently. Font Awesome was moved from cdnjs to jsdelivr's npm mirror specifically so its hash

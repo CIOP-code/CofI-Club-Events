@@ -77,6 +77,9 @@
                   <button class="cal-nav-btn" id="btn-event-search" title="Search events">
                     <i class="fa-solid fa-magnifying-glass"></i>
                   </button>
+                  <button class="cal-nav-btn" id="btn-export-pdf" title="Export events as PDF">
+                    <i class="fa-solid fa-file-pdf"></i>
+                  </button>
                   <!-- day headers will be rendered here so they stick with the calendar header -->
                   <div class="days-headers" id="days-headers"></div>
                 </div>
@@ -576,6 +579,52 @@
         <input type="text" class="form-control mb-3" id="event-search-input"
                placeholder="Search by event title, description, or entity…" autocomplete="off" />
         <div id="event-search-results"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Export Events PDF Modal (public — anyone can export a date range, no login required) -->
+<div class="modal fade" id="exportPdfModal" tabindex="-1" aria-labelledby="exportPdfModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold" id="exportPdfModalLabel">
+          <i class="fa-solid fa-file-pdf me-2"></i>Export Events PDF
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small">Generates a PDF list of events in a date range — for a whole semester, or any custom range — optionally filtered to one event type.</p>
+        <form id="pub-export-pdf-form">
+          <div class="row g-2 mb-2">
+            <div class="col-sm-6">
+              <label class="form-label" for="pub-export-pdf-start">From *</label>
+              <input type="date" class="form-control" id="pub-export-pdf-start" required />
+            </div>
+            <div class="col-sm-6">
+              <label class="form-label" for="pub-export-pdf-end">To *</label>
+              <input type="date" class="form-control" id="pub-export-pdf-end" required />
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label" for="pub-export-pdf-type">Event Type</label>
+            <select class="form-select" id="pub-export-pdf-type">
+              <option value="">All types</option>
+              <option value="meeting">Meeting</option>
+              <option value="social">Social</option>
+              <option value="academic">Academic</option>
+              <option value="athletic">Athletic</option>
+              <option value="fundraiser">Fundraiser</option>
+              <option value="performance">Performance</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div id="pub-export-pdf-msg" class="alert-inline d-none mb-2"></div>
+          <button type="submit" class="btn-coi-secondary mt-1">
+            <i class="fa-solid fa-file-pdf me-1"></i>Download PDF
+          </button>
+        </form>
       </div>
     </div>
   </div>
