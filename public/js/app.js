@@ -267,6 +267,13 @@ function hideAlert(elId) {
   if (el) el.classList.add('d-none');
 }
 
+// Same rule the API enforces server-side; checked client-side too for immediate feedback instead
+// of a round-trip. An event with end before/equal to start broke .ics export (Outlook rejects it
+// outright) and made no sense on the calendar besides.
+function isValidEventRange(startVal, endVal) {
+  return startVal && endVal && new Date(endVal) > new Date(startVal);
+}
+
 /* =============================================================
    API HELPERS
    ============================================================= */
@@ -1013,6 +1020,12 @@ document.getElementById('create-event-form').addEventListener('submit', async fu
     end_datetime:   document.getElementById('ev-end').value,
   };
 
+  if (!isValidEventRange(payload.start_datetime, payload.end_datetime)) {
+    showAlert('create-event-msg', 'End time must be after start time');
+    btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-plus me-1"></i>Create Event';
+    return;
+  }
+
   const { ok, data } = await apiFetch('/api/events', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -1212,6 +1225,14 @@ document.getElementById('admin-create-event-form').addEventListener('submit', as
     location_id = parseInt(sel.value);
   }
 
+  const adm_start = document.getElementById('adm-ev-start').value;
+  const adm_end = document.getElementById('adm-ev-end').value;
+  if (!isValidEventRange(adm_start, adm_end)) {
+    showAlert('adm-create-event-msg', 'End time must be after start time');
+    btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-plus me-1"></i>Create Event';
+    return;
+  }
+
   const { ok, data } = await apiFetch('/api/events', {
     method: 'POST',
     body: JSON.stringify({
@@ -1219,8 +1240,8 @@ document.getElementById('admin-create-event-form').addEventListener('submit', as
       title:          document.getElementById('adm-ev-title').value.trim(),
       description:    document.getElementById('adm-ev-desc').value.trim(),
       location_id,
-      start_datetime: document.getElementById('adm-ev-start').value,
-      end_datetime:   document.getElementById('adm-ev-end').value,
+      start_datetime: adm_start,
+      end_datetime:   adm_end,
     }),
   });
 
@@ -1354,14 +1375,22 @@ document.getElementById('edit-event-form').addEventListener('submit', async func
   }
   // else: sel.value === "" (the "No location" option) -> location_id stays null, clearing it.
 
+  const edit_start = document.getElementById('edit-ev-start').value;
+  const edit_end = document.getElementById('edit-ev-end').value;
+  if (!isValidEventRange(edit_start, edit_end)) {
+    showAlert('edit-event-msg', 'End time must be after start time');
+    btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Save Changes';
+    return;
+  }
+
   const { ok, data } = await apiFetch(`/api/events/${id}`, {
     method: 'PUT',
     body: JSON.stringify({
       title:          document.getElementById('edit-ev-title').value.trim(),
       description:    document.getElementById('edit-ev-desc').value.trim(),
       location_id,
-      start_datetime: document.getElementById('edit-ev-start').value,
-      end_datetime:   document.getElementById('edit-ev-end').value,
+      start_datetime: edit_start,
+      end_datetime:   edit_end,
     }),
   });
 

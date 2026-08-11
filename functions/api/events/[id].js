@@ -52,6 +52,10 @@ export async function onRequestPut({ env, request, params, data }) {
   const nextStart = start_datetime ?? event.start_datetime;
   const nextEnd = end_datetime ?? event.end_datetime;
 
+  if (new Date(nextEnd) <= new Date(nextStart)) {
+    return json({ error: 'end_datetime must be after start_datetime' }, 400);
+  }
+
   try {
     const conflict = await findLocationConflict(env, {
       location_id: nextLocationId,

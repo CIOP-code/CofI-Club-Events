@@ -70,6 +70,9 @@ export async function onRequestPost({ env, request, data }) {
   if (!title || !start_datetime || !end_datetime) {
     return json({ error: 'title, start_datetime, and end_datetime are required' }, 400);
   }
+  if (new Date(end_datetime) <= new Date(start_datetime)) {
+    return json({ error: 'end_datetime must be after start_datetime' }, 400);
+  }
 
   // Admin can specify any entity_id; entity users use their own entity_id
   const entity_id = user.type === 'admin' ? (body.entity_id || 0) : user.entity_id;
