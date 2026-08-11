@@ -124,6 +124,14 @@
                 <option value="program">Programs</option>
               </select>
               <span class="result-count" id="entities-count"></span>
+              <div class="view-toggle entities-view-toggle">
+                <button class="cal-nav-btn active" id="entities-view-grid" title="Icon grid view">
+                  <i class="fa-solid fa-grip"></i>
+                </button>
+                <button class="cal-nav-btn" id="entities-view-list" title="List view">
+                  <i class="fa-solid fa-list"></i>
+                </button>
+              </div>
             </div>
 
             <!-- Entities grid -->
@@ -133,6 +141,8 @@
                 <p>Loading entities…</p>
               </div>
             </div>
+            <!-- Entities list (alternative compact view, toggled via JS) -->
+            <div class="entities-list d-none" id="entities-list"></div>
 
             <!-- Create event form (shown after entity login) -->
             <div id="create-event-section" class="d-none p-3">

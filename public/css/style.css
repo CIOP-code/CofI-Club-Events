@@ -573,11 +573,13 @@ body {
    =================================================== */
 .entities-filter {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   align-items: center;
   padding: 0 16px;
   margin-bottom: 16px;
 }
+.entities-view-toggle { display: flex; gap: 4px; margin-left: auto; }
 .entities-filter input {
   border-radius: 8px;
   border: 1px solid var(--color-border);
@@ -656,6 +658,55 @@ body {
   border-radius: 5px;
   background: var(--coi-light);
   color: var(--coi-blue);
+}
+
+/* Compact alternative to .entities-grid for scanning a long roster (e.g. 50+ clubs) at once
+   instead of paging through icon tiles. */
+.entities-list {
+  padding: 0 16px;
+}
+.entity-list-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background .15s;
+}
+.entity-list-row:hover { background: var(--coi-light); }
+.entity-list-row:last-child { border-bottom: none; }
+.entity-list-row .entity-list-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--coi-blue), var(--color-secondary));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-strong);
+  font-size: .9rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.entity-list-row .entity-list-name {
+  font-size: .88rem;
+  font-weight: 600;
+  color: var(--color-strong);
+  flex: 1;
+}
+.entity-list-row .entity-type-badge {
+  position: static;
+  font-size: .62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .02em;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: var(--coi-light);
+  color: var(--coi-blue);
+  flex-shrink: 0;
 }
 
 /* Logged-in entity banner */

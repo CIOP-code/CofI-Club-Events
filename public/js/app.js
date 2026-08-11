@@ -18,6 +18,7 @@ const state = {
   forcedPasswordChange: false,  // true while the change-pw modal is a mandatory, non-dismissible flow
   adminEventsView: 'week',            // 'week' | 'month' — browsable range for the admin Events list
   adminEventsAnchorDate: new Date(),  // reference date for that range, so past events are reachable too
+  entitiesView: 'grid',               // 'grid' | 'list' — icon tiles vs. compact rows on the Entities page
 };
 
 /* Ensure CSS variable for calendar header height matches the rendered size.
@@ -795,9 +796,9 @@ function debounce(fn, ms) {
    ENTITIES PAGE
    ============================================================= */
 async function loadEntities() {
-  const grid = document.getElementById('entities-grid');
-  grid.innerHTML = `<div class="text-center text-muted py-5 col-12">
+  const loadingHtml = `<div class="text-center text-muted py-5 col-12">
     <i class="fa-solid fa-spinner fa-spin fa-2x mb-2"></i><p>Loading entities…</p></div>`;
+  document.getElementById(state.entitiesView === 'list' ? 'entities-list' : 'entities-grid').innerHTML = loadingHtml;
 
   const { ok, data } = await apiFetch('/api/entities');
   state.entities = ok ? (data.entities || []) : [];
@@ -813,12 +814,29 @@ function applyEntityFilters() {
   renderEntitiesGrid(filtered);
 }
 
+// Attaches the click-to-login behavior shared by both the grid tiles and the list rows.
+function wireEntityLoginTriggers(container, selector) {
+  container.querySelectorAll(selector).forEach(el => {
+    el.addEventListener('click', () => openEntityLoginModal(
+      parseInt(el.dataset.entityId), el.dataset.entityName
+    ));
+    el.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') el.click();
+    });
+  });
+}
+
 function renderEntitiesGrid(entities) {
   const grid = document.getElementById('entities-grid');
+  const list = document.getElementById('entities-list');
   const count = document.getElementById('entities-count');
 
+  grid.classList.toggle('d-none', state.entitiesView !== 'grid');
+  list.classList.toggle('d-none', state.entitiesView !== 'list');
+  const target = state.entitiesView === 'list' ? list : grid;
+
   if (!entities.length) {
-    grid.innerHTML = `<div class="text-center text-muted py-5 col-12">
+    target.innerHTML = `<div class="text-center text-muted py-5 col-12">
       <i class="fa-solid fa-face-sad-tear fa-2x mb-2"></i>
       <p>No entities found.</p></div>`;
     count.textContent = '';
@@ -826,6 +844,20 @@ function renderEntitiesGrid(entities) {
   }
 
   count.textContent = `${entities.length} entit${entities.length !== 1 ? 'ies' : 'y'}`;
+
+  if (state.entitiesView === 'list') {
+    list.innerHTML = entities.map(entity => {
+      const typeLabel = TYPE_LABELS[entity.type] || entity.type;
+      return `<div class="entity-list-row" data-entity-id="${entity.id}" data-entity-name="${escHtml(entity.name)}"
+                   tabindex="0" role="button" aria-label="Login as ${escHtml(entity.name)}">
+        <div class="entity-list-avatar">${escHtml(entity.name.charAt(0).toUpperCase())}</div>
+        <div class="entity-list-name">${escHtml(entity.name)}</div>
+        <span class="entity-type-badge">${escHtml(typeLabel)}</span>
+      </div>`;
+    }).join('');
+    wireEntityLoginTriggers(list, '.entity-list-row');
+    return;
+  }
 
   grid.innerHTML = entities.map(entity => {
     // Use a Font Awesome icon + initial instead of storing a logo
@@ -838,20 +870,25 @@ function renderEntitiesGrid(entities) {
       <div class="entity-name">${escHtml(entity.name)}</div>
     </div>`;
   }).join('');
-
-  grid.querySelectorAll('.entity-tile').forEach(tile => {
-    tile.addEventListener('click', () => openEntityLoginModal(
-      parseInt(tile.dataset.entityId), tile.dataset.entityName
-    ));
-    tile.addEventListener('keydown', e => {
-      if (e.key === 'Enter' || e.key === ' ') tile.click();
-    });
-  });
+  wireEntityLoginTriggers(grid, '.entity-tile');
 }
 
 // Entity search/filter
 document.getElementById('entity-search').addEventListener('input', applyEntityFilters);
 document.getElementById('entity-type-filter').addEventListener('change', applyEntityFilters);
+
+document.getElementById('entities-view-grid').addEventListener('click', () => {
+  state.entitiesView = 'grid';
+  document.getElementById('entities-view-grid').classList.add('active');
+  document.getElementById('entities-view-list').classList.remove('active');
+  applyEntityFilters();
+});
+document.getElementById('entities-view-list').addEventListener('click', () => {
+  state.entitiesView = 'list';
+  document.getElementById('entities-view-list').classList.add('active');
+  document.getElementById('entities-view-grid').classList.remove('active');
+  applyEntityFilters();
+});
 
 function openEntityLoginModal(entityId, entityName) {
   state.pendingLoginEntity = { id: entityId, name: entityName };
