@@ -850,7 +850,6 @@ function renderEntitiesGrid(entities) {
       const typeLabel = TYPE_LABELS[entity.type] || entity.type;
       return `<div class="entity-list-row" data-entity-id="${entity.id}" data-entity-name="${escHtml(entity.name)}"
                    tabindex="0" role="button" aria-label="Login as ${escHtml(entity.name)}">
-        <div class="entity-list-avatar">${escHtml(entity.name.charAt(0).toUpperCase())}</div>
         <div class="entity-list-name">${escHtml(entity.name)}</div>
         <span class="entity-type-badge">${escHtml(typeLabel)}</span>
       </div>`;

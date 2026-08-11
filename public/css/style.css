@@ -677,19 +677,6 @@ body {
 }
 .entity-list-row:hover { background: var(--coi-light); }
 .entity-list-row:last-child { border-bottom: none; }
-.entity-list-row .entity-list-avatar {
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, var(--coi-blue), var(--color-secondary));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-strong);
-  font-size: .9rem;
-  font-weight: 700;
-  flex-shrink: 0;
-}
 .entity-list-row .entity-list-name {
   font-size: .88rem;
   font-weight: 600;
