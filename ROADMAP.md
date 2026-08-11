@@ -81,6 +81,25 @@ individual events easier to find, share, and get onto someone's own calendar.
   across leadership turnover, with the admin password-reset flow handling handoffs). Would need
   named per-person logins if tracking who specifically posted each event ever becomes important —
   a bigger change, not scoped out.
+- **Usage analytics dashboard.** Turn the admin Dashboard tab into an actual dashboard: event
+  count, how many entities have posted at least one event, PDF export count, and app views broken
+  down by device (mobile vs desktop). Nothing today records page views or exports at all, so this
+  needs a new lightweight events-log table (e.g. `event_type` + `device_type` + timestamp, no IP
+  or other identifying data — aggregate counts only, consistent with this app's existing
+  no-tracking posture) plus a beacon call added wherever a view/export should count, and an admin
+  API endpoint to summarize it. Open question before building: stat tiles (simple totals, maybe
+  with a "last 30 days" breakdown) vs real trend charts — the latter needs a charting library
+  added and SRI-pinned the same way jsPDF was.
+- **Feedback / bug report tool.** A public button/modal that stores free-text feedback (plus an
+  optional reply-to email) in a new table, and emails the admin when one comes in. The email
+  address to notify would be a new admin-panel setting (a column on the single-row `admin` table).
+  The real open question is *how* to send the email from a Cloudflare Pages Function — there's no
+  built-in mail sending, so it's either Cloudflare's own Email Routing "send email" binding (no
+  third-party account needed, but the admin's destination address has to be verified once in the
+  Cloudflare dashboard) or a third-party transactional email API (Resend/SendGrid/etc., which
+  means the user creating an account there and setting the API key as a Cloudflare secret
+  themselves — same reasoning as this app never asking for `ADMIN_PASSWORD` in chat applies to any
+  new API key too). Needs that choice made before implementation starts.
 
 ## Shipped
 

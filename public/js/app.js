@@ -2130,6 +2130,10 @@ const ROADMAP_PHASES = [
         desc: '/display.html’s day count is currently a URL parameter (?days=N) set once at TV setup — deliberately simple. Would become a real admin-panel setting if that stops being a one-time thing (e.g. multiple screens needing different settings).' },
       { title: 'Per-person entity logins / audit trail', status: 'planned',
         desc: 'Entities currently share one password per organization, which suits how they’re used today. Would need named per-person logins if tracking who specifically posted each event ever becomes important — a bigger change.' },
+      { title: 'Usage analytics dashboard', status: 'planned',
+        desc: 'Turn the admin Dashboard tab into an actual dashboard: event count, entities that have posted at least one event, PDF export count, and app views by device (mobile vs desktop). Needs a new aggregate-only events-log table (no IP/identifying data) plus a beacon call and a summary API endpoint. Open question: simple stat tiles vs real trend charts (the latter needs an SRI-pinned charting library, same treatment as jsPDF).' },
+      { title: 'Feedback / bug report tool', status: 'planned',
+        desc: 'A public feedback/bug-report button storing submissions in a new table and emailing the admin (address configurable in the admin panel, stored on the admin row). Blocked on choosing how to send email from a Pages Function: Cloudflare’s own Email Routing send binding (no third-party account, but the destination address needs one-time verification) vs a third-party transactional email API (needs the user to create an account and set the API key as a Cloudflare secret themselves).' },
     ],
   },
 ];
