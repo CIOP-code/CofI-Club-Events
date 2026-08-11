@@ -281,6 +281,7 @@ body {
   color: var(--coi-blue);
 }
 .cal-nav-btn {
+  position: relative;
   padding: 5px 14px;
   border-radius: 6px;
   border: 1px solid var(--color-border-2);
@@ -289,6 +290,16 @@ body {
   cursor: pointer;
   color: var(--color-secondary);
   transition: background .15s;
+}
+.filter-active-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--coi-gold);
+  border: 1px solid var(--color-surface);
 }
 .cal-nav-btn:hover { background: var(--coi-light); }
 .cal-nav-btn.active {

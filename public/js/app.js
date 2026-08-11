@@ -19,6 +19,7 @@ const state = {
   adminEventsView: 'week',            // 'week' | 'month' — browsable range for the admin Events list
   adminEventsAnchorDate: new Date(),  // reference date for that range, so past events are reachable too
   entitiesView: 'list',               // 'grid' | 'list' — icon tiles vs. compact rows on the Entities page
+  calFilters: { event_type: '', entity_id: '', location_id: '' }, // calendar view filters
 };
 
 /* Ensure CSS variable for calendar header height matches the rendered size.
@@ -335,8 +336,18 @@ const MONTHS = ['January','February','March','April','May','June',
                 'July','August','September','October','November','December'];
 
 async function fetchEvents(startISO, endISO) {
-  const { ok, data } = await apiFetch(`/api/events?start=${startISO}&end=${endISO}`);
+  let url = `/api/events?start=${startISO}&end=${endISO}`;
+  const { event_type, entity_id, location_id } = state.calFilters;
+  if (event_type) url += `&event_type=${encodeURIComponent(event_type)}`;
+  if (entity_id) url += `&entity_id=${encodeURIComponent(entity_id)}`;
+  if (location_id) url += `&location_id=${encodeURIComponent(location_id)}`;
+  const { ok, data } = await apiFetch(url);
   return ok ? data.events || [] : [];
+}
+
+function calFiltersActive() {
+  const { event_type, entity_id, location_id } = state.calFilters;
+  return Boolean(event_type || entity_id || location_id);
 }
 
 function isoLocal(d) {
@@ -2237,6 +2248,69 @@ async function runEventSearch(q) {
 document.getElementById('event-search-input').addEventListener('input', debounce(function () {
   runEventSearch(this.value);
 }, 300));
+
+/* =============================================================
+   CALENDAR FILTERS (event type / entity / location)
+   ============================================================= */
+function updateCalFilterDot() {
+  document.getElementById('cal-filter-dot').classList.toggle('d-none', !calFiltersActive());
+}
+
+async function populateCalFilterOptions() {
+  const entitySel = document.getElementById('cal-filter-entity');
+  const locationSel = document.getElementById('cal-filter-location');
+
+  const [entities, locations] = await Promise.all([
+    apiFetch('/api/entities').then(({ ok, data }) => (ok ? data.entities || [] : [])),
+    fetchLocations(),
+  ]);
+
+  const ENTITY_TYPE_ORDER = ['club', 'department', 'office', 'organization', 'program'];
+  const groupedEntities = ENTITY_TYPE_ORDER
+    .map(type => ({ type, label: TYPE_LABELS[type] || type, items: entities.filter(en => en.type === type) }))
+    .filter(g => g.items.length);
+  const knownTypes = new Set(ENTITY_TYPE_ORDER);
+  const otherEntities = entities.filter(en => !knownTypes.has(en.type));
+  if (otherEntities.length) groupedEntities.push({ type: 'other', label: 'Other', items: otherEntities });
+
+  entitySel.innerHTML = `<option value="">All entities</option>` +
+    groupedEntities.map(g => `<optgroup label="${escHtml(g.label)}s">` +
+      g.items.map(en => `<option value="${en.id}">${escHtml(en.name)}</option>`).join('') +
+      `</optgroup>`
+    ).join('');
+
+  locationSel.innerHTML = `<option value="">All locations</option>` +
+    locations.map(l => `<option value="${l.id}">${escHtml(l.name)}</option>`).join('');
+
+  document.getElementById('cal-filter-type').value = state.calFilters.event_type;
+  entitySel.value = state.calFilters.entity_id;
+  locationSel.value = state.calFilters.location_id;
+}
+
+document.getElementById('btn-cal-filter').addEventListener('click', async () => {
+  new bootstrap.Modal(document.getElementById('calFilterModal')).show();
+  await populateCalFilterOptions();
+});
+
+document.getElementById('cal-filter-form').addEventListener('submit', function (e) {
+  e.preventDefault();
+  state.calFilters = {
+    event_type:  document.getElementById('cal-filter-type').value,
+    entity_id:   document.getElementById('cal-filter-entity').value,
+    location_id: document.getElementById('cal-filter-location').value,
+  };
+  updateCalFilterDot();
+  bootstrap.Modal.getInstance(document.getElementById('calFilterModal'))?.hide();
+  if (state.currentPage === 'home') renderCalendar();
+});
+
+document.getElementById('cal-filter-clear').addEventListener('click', () => {
+  state.calFilters = { event_type: '', entity_id: '', location_id: '' };
+  document.getElementById('cal-filter-form').reset();
+  updateCalFilterDot();
+  bootstrap.Modal.getInstance(document.getElementById('calFilterModal'))?.hide();
+  if (state.currentPage === 'home') renderCalendar();
+});
 
 /* =============================================================
    INIT

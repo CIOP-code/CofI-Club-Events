@@ -1,6 +1,7 @@
 /**
- * GET  /api/events?start=&end=&q=&entity_id=&event_type=   – list events (optional date range,
- *                                                             text search, entity, and type filters)
+ * GET  /api/events?start=&end=&q=&entity_id=&event_type=&location_id=   – list events (optional
+ *                                                    date range, text search, entity, type, and
+ *                                                    location filters)
  * POST /api/events                                          – create a new event (requires entity or admin auth)
  */
 import { findLocationConflict, locationConflictMessage } from '../utils/scheduling.js';
@@ -21,6 +22,7 @@ export async function onRequestGet({ env, request }) {
   const q     = url.searchParams.get('q');
   const entityId = url.searchParams.get('entity_id');
   const eventType = url.searchParams.get('event_type');
+  const locationId = url.searchParams.get('location_id');
 
   let query = `
     SELECT e.*, en.name AS entity_name, en.type AS entity_type, l.name AS location_name
@@ -53,6 +55,11 @@ export async function onRequestGet({ env, request }) {
   if (eventType) {
     conditions.push(`e.event_type = ?`);
     params.push(eventType);
+  }
+
+  if (locationId) {
+    conditions.push(`e.location_id = ?`);
+    params.push(locationId);
   }
 
   if (conditions.length) query += ` WHERE ` + conditions.join(' AND ');

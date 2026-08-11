@@ -80,6 +80,10 @@
                   <button class="cal-nav-btn" id="btn-export-pdf" title="Export events as PDF">
                     <i class="fa-solid fa-file-pdf"></i>
                   </button>
+                  <button class="cal-nav-btn" id="btn-cal-filter" title="Filter events">
+                    <i class="fa-solid fa-filter"></i>
+                    <span class="filter-active-dot d-none" id="cal-filter-dot"></span>
+                  </button>
                   <!-- day headers will be rendered here so they stick with the calendar header -->
                   <div class="days-headers" id="days-headers"></div>
                 </div>
@@ -759,6 +763,57 @@
           <button type="submit" class="btn-coi-secondary mt-1">
             <i class="fa-solid fa-file-pdf me-1"></i>Download PDF
           </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Filter Events Modal (public — narrows the calendar view by type, entity, and location) -->
+<div class="modal fade" id="calFilterModal" tabindex="-1" aria-labelledby="calFilterModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold" id="calFilterModalLabel">
+          <i class="fa-solid fa-filter me-2"></i>Filter Events
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="cal-filter-form">
+          <div class="mb-2">
+            <label class="form-label" for="cal-filter-type">Event Type</label>
+            <select class="form-select" id="cal-filter-type">
+              <option value="">All types</option>
+              <option value="meeting">Meeting</option>
+              <option value="social">Social</option>
+              <option value="academic">Academic</option>
+              <option value="athletic">Athletic</option>
+              <option value="fundraiser">Fundraiser</option>
+              <option value="performance">Performance</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label" for="cal-filter-entity">Entity</label>
+            <select class="form-select" id="cal-filter-entity">
+              <option value="">All entities</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="cal-filter-location">Location</label>
+            <select class="form-select" id="cal-filter-location">
+              <option value="">All locations</option>
+            </select>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn-coi-secondary">
+              <i class="fa-solid fa-filter me-1"></i>Apply
+            </button>
+            <button type="button" class="btn btn-outline-secondary" id="cal-filter-clear">
+              Clear Filters
+            </button>
+          </div>
         </form>
       </div>
     </div>
