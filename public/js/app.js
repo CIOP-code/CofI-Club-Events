@@ -822,7 +822,16 @@ window.addEventListener('resize', debounce(() => {
 
 function debounce(fn, ms) {
   let t;
-  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+  // A regular function, not an arrow: addEventListener calls the listener with `this` bound to
+  // the element it's attached to, and that only happens for a non-arrow function. The inner
+  // setTimeout arrow closes over that `this` so it reaches `fn` unchanged -- event-search-input's
+  // handler relies on `this.value` inside the debounced callback, which silently broke (arrow
+  // functions ignore the caller-supplied `this` entirely, so it fell through to undefined) when
+  // this returned an arrow function instead.
+  return function (...args) {
+    clearTimeout(t);
+    t = setTimeout(() => fn.apply(this, args), ms);
+  };
 }
 
 /* =============================================================
