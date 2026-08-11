@@ -50,7 +50,7 @@ in with its own password and can create/manage its own events.
 - Admin login (default password set via `ADMIN_PASSWORD` environment variable)
  - Create new entities (name, type, default password) — entity logos are represented by icons
 - Create events on behalf of any entity
-- Delete entities and events
+- Edit and delete entities, events, and locations
 - Reset an entity's password (e.g. when its point of contact changes) — generates a fresh temporary
   password shown once, and forces the entity to set its own on next login
 

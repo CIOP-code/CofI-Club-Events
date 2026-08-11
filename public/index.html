@@ -379,6 +379,14 @@
                     <div id="admin-events-list">Loading…</div>
                   </div>
                 </div>
+
+                <!-- Locations list (admin can delete; entity-or-admin can rename, matching who can create one) -->
+                <div class="col-12">
+                  <div class="section-card">
+                    <h4><i class="fa-solid fa-location-dot me-2"></i>All Locations</h4>
+                    <div id="admin-locations-list">Loading…</div>
+                  </div>
+                </div>
               </div>
               </div><!-- /admin-section-dashboard -->
 
@@ -634,6 +642,33 @@
             </select>
           </div>
           <div id="edit-entity-msg" class="alert-inline d-none mb-2"></div>
+          <button type="submit" class="btn-coi-secondary mt-1">
+            <i class="fa-solid fa-check me-1"></i>Save Changes
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Location Modal -->
+<div class="modal fade" id="editLocationModal" tabindex="-1" aria-labelledby="editLocationModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:420px">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold" id="editLocationModalLabel">
+          <i class="fa-solid fa-pen me-2"></i>Edit Location
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="edit-location-form">
+          <input type="hidden" id="edit-loc-id" />
+          <div class="mb-2">
+            <label class="form-label" for="edit-loc-name">Location Name *</label>
+            <input type="text" class="form-control" id="edit-loc-name" required />
+          </div>
+          <div id="edit-location-msg" class="alert-inline d-none mb-2"></div>
           <button type="submit" class="btn-coi-secondary mt-1">
             <i class="fa-solid fa-check me-1"></i>Save Changes
           </button>

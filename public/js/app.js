@@ -1147,9 +1147,10 @@ async function loadAdminData() {
       `</optgroup>`
     ).join('');
 
-  // Populate locations for admin event form
+  // Populate locations for admin event form + the locations list below
+  let locations = [];
   try {
-    const locations = await fetchLocations();
+    locations = await fetchLocations();
     const locSel = document.getElementById('adm-ev-location');
     if (locSel) {
       locSel.innerHTML = `<option value="">– select location –</option>` +
@@ -1193,6 +1194,32 @@ async function loadAdminData() {
     });
   } else {
     enList.innerHTML = '<p class="text-muted small">No entities yet.</p>';
+  }
+
+  // Locations list – entity-or-admin can rename (matching who can create one), admin-only delete
+  const locList = document.getElementById('admin-locations-list');
+  if (locations.length) {
+    locList.innerHTML = locations.map(loc => `
+      <div class="event-list-item">
+        <div class="ev-info">
+          <div class="ev-title-txt">${escHtml(loc.name)}</div>
+        </div>
+        <button class="btn btn-sm btn-outline-secondary me-1" data-edit-location="${loc.id}" data-edit-location-name="${escHtml(loc.name)}" title="Edit location">
+          <i class="fa-solid fa-pen"></i>
+        </button>
+        <button class="btn btn-sm btn-outline-danger" data-delete-location="${loc.id}" title="Delete location">
+          <i class="fa-solid fa-trash"></i>
+        </button>
+      </div>`).join('');
+
+    locList.querySelectorAll('[data-delete-location]').forEach(btn => {
+      btn.addEventListener('click', () => adminDeleteLocation(parseInt(btn.dataset.deleteLocation)));
+    });
+    locList.querySelectorAll('[data-edit-location]').forEach(btn => {
+      btn.addEventListener('click', () => openEditLocationModal(parseInt(btn.dataset.editLocation), btn.dataset.editLocationName));
+    });
+  } else {
+    locList.innerHTML = '<p class="text-muted small">No locations yet.</p>';
   }
 
   // Events list
@@ -1542,6 +1569,41 @@ document.getElementById('edit-entity-form').addEventListener('submit', async fun
 
   if (!ok) { showAlert('edit-entity-msg', data.error || 'Failed to update entity'); return; }
   bootstrap.Modal.getInstance(document.getElementById('editEntityModal')).hide();
+  loadAdminData();
+});
+
+// Delete location (admin only; events referencing it just lose their location, not deleted)
+async function adminDeleteLocation(id) {
+  if (!confirm('Delete this location? Any events using it will keep their date/time but lose the location.')) return;
+  const { ok, data } = await apiFetch(`/api/locations/${id}`, { method: 'DELETE' });
+  if (!ok) { alert(data.error || 'Failed to delete location'); return; }
+  loadAdminData();
+}
+
+// Edit location (rename)
+function openEditLocationModal(id, name) {
+  document.getElementById('edit-loc-id').value = id;
+  document.getElementById('edit-loc-name').value = name;
+  hideAlert('edit-location-msg');
+  new bootstrap.Modal(document.getElementById('editLocationModal')).show();
+}
+
+document.getElementById('edit-location-form').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideAlert('edit-location-msg');
+  const btn = this.querySelector('button[type=submit]');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span>';
+
+  const id = document.getElementById('edit-loc-id').value;
+  const { ok, data } = await apiFetch(`/api/locations/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ name: document.getElementById('edit-loc-name').value.trim() }),
+  });
+
+  btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Save Changes';
+
+  if (!ok) { showAlert('edit-location-msg', data.error || 'Failed to update location'); return; }
+  bootstrap.Modal.getInstance(document.getElementById('editLocationModal')).hide();
   loadAdminData();
 });
 
