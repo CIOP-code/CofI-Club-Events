@@ -49,6 +49,7 @@ export async function onRequestPost({ env, params, data }) {
       temp_password: tempPassword,
     });
   } catch (err) {
-    return json({ error: err.message }, 500);
+    console.error(err);
+    return json({ error: 'Internal server error' }, 500);
   }
 }

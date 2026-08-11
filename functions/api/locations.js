@@ -14,7 +14,8 @@ export async function onRequestGet({ env }) {
     const result = await env.DB.prepare(`SELECT id, name FROM locations ORDER BY name ASC`).all();
     return json({ locations: result.results });
   } catch (err) {
-    return json({ error: err.message }, 500);
+    console.error(err);
+    return json({ error: 'Internal server error' }, 500);
   }
 }
 
@@ -37,6 +38,7 @@ export async function onRequestPost({ env, request, data }) {
     return json({ id: result.meta.last_row_id, message: 'Location created' }, 201);
   } catch (err) {
     if (err.message.includes('UNIQUE')) return json({ error: 'Location already exists' }, 409);
-    return json({ error: err.message }, 500);
+    console.error(err);
+    return json({ error: 'Internal server error' }, 500);
   }
 }

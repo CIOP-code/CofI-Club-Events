@@ -50,7 +50,7 @@ in with its own password and can create/manage its own events.
 - Admin login (default password set via `ADMIN_PASSWORD` environment variable)
  - Create new entities (name, type, default password) — entity logos are represented by icons
 - Create events on behalf of any entity
-- Delete entities and events
+- Edit and delete entities, events, and locations
 - Reset an entity's password (e.g. when its point of contact changes) — generates a fresh temporary
   password shown once, and forces the entity to set its own on next login
 
@@ -111,6 +111,10 @@ You can pre-populate the `locations` table via the D1 console or by using the `/
 wrangler pages secret put JWT_SECRET
 wrangler pages secret put ADMIN_PASSWORD
 ```
+This sets them for **Production only**. Preview deployments (PRs/branches) are a separate
+Cloudflare Pages environment with a separate secret store — set the same two secrets for Preview
+too, in the dashboard under Pages project → Settings → Environment variables → Preview tab, or
+every preview deployment's login will fail with "Server misconfigured: JWT_SECRET is not set".
 
 ### 4. Deploy
 ```bash
@@ -122,7 +126,34 @@ wrangler pages deploy public
 Navigate to **/admin** and log in with the `ADMIN_PASSWORD` value you set above.
 The admin account is bootstrapped automatically on first login.
 
+### 6. (Optional) Bulk-import entities
+The **Bulk Import Entities** card on the Admin Dashboard is the easiest way to do this: paste one
+name per line, pick a type, and it creates them all through the same validation as creating one by
+hand, then offers a CSV of the generated temporary passwords to download.
+
+For scripted/repeatable imports instead, `scripts/seed-entities.mjs` does the same thing from the
+command line against a JSON file (see `scripts/clubs-2025-2026.json` for the shape/example):
+```bash
+ADMIN_PASSWORD=... node scripts/seed-entities.mjs scripts/clubs-2025-2026.json --base-url https://your-site.pages.dev
+```
+Either way, each entity gets a random temporary password (forced to change on first login, same as
+any admin-created entity); already-existing names are skipped, not treated as a failure, so it's
+safe to re-run. The CLI version writes `scripts/seed-results-<timestamp>.csv` (git-ignored) mapping name → temporary password —
+handle it like the credentials it is, and delete it once distributed.
+
+The **Bulk Import Locations** card works the same way for the shared location list (one name per
+line, no password/type involved since locations don't have their own login).
+
 ## Development
+Create a `.dev.vars` file (git-ignored) in the project root with:
+```
+JWT_SECRET=dev-secret-change-in-production
+ADMIN_PASSWORD=CollegeOfIdaho2024!
+```
+`JWT_SECRET` and `ADMIN_PASSWORD` are required — there's no built-in fallback, so login endpoints
+return a 500 without this file (or the equivalent secrets in a deployed environment). See
+[SECURITY.md](./SECURITY.md) for why.
+
 ```bash
 wrangler pages dev public --d1=DB
 ```

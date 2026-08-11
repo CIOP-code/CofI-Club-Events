@@ -25,7 +25,8 @@ export async function onRequestGet({ env, params }) {
     if (!event) return json({ error: 'Event not found' }, 404);
     return json({ event });
   } catch (err) {
-    return json({ error: err.message }, 500);
+    console.error(err);
+    return json({ error: 'Internal server error' }, 500);
   }
 }
 
@@ -51,6 +52,10 @@ export async function onRequestPut({ env, request, params, data }) {
   const nextStart = start_datetime ?? event.start_datetime;
   const nextEnd = end_datetime ?? event.end_datetime;
 
+  if (new Date(nextEnd) <= new Date(nextStart)) {
+    return json({ error: 'end_datetime must be after start_datetime' }, 400);
+  }
+
   try {
     const conflict = await findLocationConflict(env, {
       location_id: nextLocationId,
@@ -72,7 +77,8 @@ export async function onRequestPut({ env, request, params, data }) {
     ).run();
     return json({ message: 'Event updated' });
   } catch (err) {
-    return json({ error: err.message }, 500);
+    console.error(err);
+    return json({ error: 'Internal server error' }, 500);
   }
 }
 
@@ -92,6 +98,7 @@ export async function onRequestDelete({ env, params, data }) {
     await env.DB.prepare('DELETE FROM events WHERE id = ?').bind(id).run();
     return json({ message: 'Event deleted' });
   } catch (err) {
-    return json({ error: err.message }, 500);
+    console.error(err);
+    return json({ error: 'Internal server error' }, 500);
   }
 }

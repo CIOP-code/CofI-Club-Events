@@ -1,6 +1,7 @@
 /**
- * GET  /api/events?start=&end=&q=   – list events (optional date range + text search filters)
- * POST /api/events                   – create a new event (requires entity or admin auth)
+ * GET  /api/events?start=&end=&q=&entity_id=   – list events (optional date range, text search,
+ *                                                 and entity filters)
+ * POST /api/events                              – create a new event (requires entity or admin auth)
  */
 import { findLocationConflict, locationConflictMessage } from '../utils/scheduling.js';
 
@@ -16,6 +17,7 @@ export async function onRequestGet({ env, request }) {
   const start = url.searchParams.get('start');
   const end   = url.searchParams.get('end');
   const q     = url.searchParams.get('q');
+  const entityId = url.searchParams.get('entity_id');
 
   let query = `
     SELECT e.*, en.name AS entity_name, en.type AS entity_type, l.name AS location_name
@@ -40,15 +42,21 @@ export async function onRequestGet({ env, request }) {
     params.push(like, like, like);
   }
 
+  if (entityId) {
+    conditions.push(`e.entity_id = ?`);
+    params.push(entityId);
+  }
+
   if (conditions.length) query += ` WHERE ` + conditions.join(' AND ');
-  query += ` ORDER BY e.start_datetime ASC`;
+  query += entityId ? ` ORDER BY e.start_datetime DESC` : ` ORDER BY e.start_datetime ASC`;
   if (q) query += ` LIMIT 50`;
 
   try {
     const result = await env.DB.prepare(query).bind(...params).all();
     return json({ events: result.results });
   } catch (err) {
-    return json({ error: err.message }, 500);
+    console.error(err);
+    return json({ error: 'Internal server error' }, 500);
   }
 }
 
@@ -69,6 +77,9 @@ export async function onRequestPost({ env, request, data }) {
   if (!title || !start_datetime || !end_datetime) {
     return json({ error: 'title, start_datetime, and end_datetime are required' }, 400);
   }
+  if (new Date(end_datetime) <= new Date(start_datetime)) {
+    return json({ error: 'end_datetime must be after start_datetime' }, 400);
+  }
 
   // Admin can specify any entity_id; entity users use their own entity_id
   const entity_id = user.type === 'admin' ? (body.entity_id || 0) : user.entity_id;
@@ -87,6 +98,7 @@ export async function onRequestPost({ env, request, data }) {
 
     return json({ id: result.meta.last_row_id, message: 'Event created' }, 201);
   } catch (err) {
-    return json({ error: err.message }, 500);
+    console.error(err);
+    return json({ error: 'Internal server error' }, 500);
   }
 }

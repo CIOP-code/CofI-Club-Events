@@ -5,6 +5,8 @@
  */
 import { verifyPassword } from '../../utils/crypto.js';
 import { signToken } from '../../utils/jwt.js';
+import { requireEnv } from '../../utils/env.js';
+import { checkRateLimit, recordFailedAttempt } from '../../utils/rateLimit.js';
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -22,17 +24,34 @@ export async function onRequestPost({ env, request }) {
     return json({ error: 'entity_id and password are required' }, 400);
   }
 
+  // Fails open (lets the attempt through) rather than blocking login entirely if the
+  // login_attempts table hasn't been migrated in yet — see schema.sql.
+  let ip = null;
+  try {
+    const rl = await checkRateLimit(env, request, 'entity');
+    ip = rl.ip;
+    if (!rl.allowed) {
+      return json({ error: 'Too many failed login attempts. Try again in a few minutes.' }, 429);
+    }
+  } catch { /* rate limiting unavailable; don't block login on it */ }
+
   try {
     const entity = await env.DB.prepare(
       `SELECT id, name, type, password_hash, salt, must_change_password FROM entities WHERE id = ?`
     ).bind(entity_id).first();
 
-    if (!entity) return json({ error: 'Entity not found' }, 404);
+    if (!entity) {
+      if (ip) await recordFailedAttempt(env, ip, 'entity').catch(() => {});
+      return json({ error: 'Entity not found' }, 404);
+    }
 
     const valid = await verifyPassword(password, entity.password_hash, entity.salt);
-    if (!valid) return json({ error: 'Incorrect password' }, 401);
+    if (!valid) {
+      if (ip) await recordFailedAttempt(env, ip, 'entity').catch(() => {});
+      return json({ error: 'Incorrect password' }, 401);
+    }
 
-    const secret = env.JWT_SECRET || 'change-this-secret-in-production';
+    const secret = requireEnv(env, 'JWT_SECRET');
     const token = await signToken({ type: 'entity', entity_id: entity.id, entity_name: entity.name }, secret);
 
     return json({
@@ -45,6 +64,7 @@ export async function onRequestPost({ env, request }) {
       },
     });
   } catch (err) {
-    return json({ error: err.message }, 500);
+    console.error(err);
+    return json({ error: 'Internal server error' }, 500);
   }
 }

@@ -16,6 +16,9 @@ const state = {
   adminToken: null,
   pendingLoginEntity: null,  // entity object waiting for password
   forcedPasswordChange: false,  // true while the change-pw modal is a mandatory, non-dismissible flow
+  adminEventsView: 'week',            // 'week' | 'month' — browsable range for the admin Events list
+  adminEventsAnchorDate: new Date(),  // reference date for that range, so past events are reachable too
+  entitiesView: 'list',               // 'grid' | 'list' — icon tiles vs. compact rows on the Entities page
 };
 
 /* Ensure CSS variable for calendar header height matches the rendered size.
@@ -267,6 +270,13 @@ function hideAlert(elId) {
   if (el) el.classList.add('d-none');
 }
 
+// Same rule the API enforces server-side; checked client-side too for immediate feedback instead
+// of a round-trip. An event with end before/equal to start broke .ics export (Outlook rejects it
+// outright) and made no sense on the calendar besides.
+function isValidEventRange(startVal, endVal) {
+  return startVal && endVal && new Date(endVal) > new Date(startVal);
+}
+
 /* =============================================================
    API HELPERS
    ============================================================= */
@@ -424,7 +434,10 @@ async function renderCalendar() {
     function topHeightPx(start, end) {
       const startMin = start.getHours() * 60 + start.getMinutes();
       const endMin   = end.getHours() * 60 + end.getMinutes();
-      const duration = Math.max(endMin - startMin, 15); // min 15-min visual height for readability
+      // Min 30-min visual height: shorter than that there's no room for title + location +
+      // entity even at the smallest legible font size. This only affects the rendered block
+      // size, never the event's actual stored duration.
+      const duration = Math.max(endMin - startMin, 30);
       return { topPx: startMin * (HOUR_H / 60), heightPx: duration * (HOUR_H / 60) };
     }
 
@@ -444,6 +457,7 @@ async function renderCalendar() {
         <div class="ev-title">${escHtml(ev.title)}</div>
         <div class="ev-location">${escHtml(ev.location_name || '')}</div>
         <div class="ev-entity">${escHtml(ev.entity_name || '')}</div>
+        ${ev.description ? `<div class="ev-desc">${escHtml(truncateText(ev.description, 120))}</div>` : ''}
       </div>`;
     });
 
@@ -541,6 +555,10 @@ async function renderCalendar() {
   if (!state._hasScrolledToNow) {
     const nowEl = grid.querySelector('.now-line');
     const container = findVerticalScrollContainer(grid) || document.documentElement;
+    const dayHeaderH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--day-header-h')) || 52;
+    // Midnight-6am is rarely where anything's happening, so never default to showing it — either
+    // center on "now" (if later than 6am) or fall back to 6am, but don't scroll any earlier than that.
+    const minScrollTop = 6 * HOUR_H + dayHeaderH;
     if (nowEl && container) {
       const nowRect = nowEl.getBoundingClientRect();
       const contRect = container.getBoundingClientRect();
@@ -550,13 +568,11 @@ async function renderCalendar() {
       const margin = 24;
       const delta = nowRect.top - (contRect.top + headerH + margin);
       // Adjust scrollTop by delta (works for both documentElement and scrollable container)
-      container.scrollTop = (container.scrollTop || 0) + delta;
+      container.scrollTop = Math.max((container.scrollTop || 0) + delta, minScrollTop);
     } else {
-      // Fall back to scrolling to 7am (previous behavior)
-      const dayHeaderH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--day-header-h')) || 52;
-      const scrollTo = 7 * HOUR_H + dayHeaderH; // align so 7am sits below headers
-      const container = findVerticalScrollContainer(grid) || document.documentElement;
-      container.scrollTop = scrollTo;
+      // Fall back to 6am when there's no "now" line to center on (e.g. viewing a week/day that
+      // doesn't include today).
+      container.scrollTop = minScrollTop;
     }
     state._hasScrolledToNow = true;
   }
@@ -616,6 +632,14 @@ function escHtml(str) {
   return String(str || '')
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// Caps how much of a description ever lands in a calendar tile -- CSS clips it visually once the
+// block runs out of room, but the full text was still sitting in the DOM (bloats markup, and
+// screen readers would read the whole thing regardless of what's visibly clipped).
+function truncateText(str, max) {
+  const s = String(str || '');
+  return s.length > max ? s.slice(0, max).trimEnd() + '…' : s;
 }
 
 // Lists the events collapsed into an overflow tile; clicking one opens the normal event modal.
@@ -786,9 +810,9 @@ function debounce(fn, ms) {
    ENTITIES PAGE
    ============================================================= */
 async function loadEntities() {
-  const grid = document.getElementById('entities-grid');
-  grid.innerHTML = `<div class="text-center text-muted py-5 col-12">
+  const loadingHtml = `<div class="text-center text-muted py-5 col-12">
     <i class="fa-solid fa-spinner fa-spin fa-2x mb-2"></i><p>Loading entities…</p></div>`;
+  document.getElementById(state.entitiesView === 'list' ? 'entities-list' : 'entities-grid').innerHTML = loadingHtml;
 
   const { ok, data } = await apiFetch('/api/entities');
   state.entities = ok ? (data.entities || []) : [];
@@ -804,12 +828,29 @@ function applyEntityFilters() {
   renderEntitiesGrid(filtered);
 }
 
+// Attaches the click-to-login behavior shared by both the grid tiles and the list rows.
+function wireEntityLoginTriggers(container, selector) {
+  container.querySelectorAll(selector).forEach(el => {
+    el.addEventListener('click', () => openEntityLoginModal(
+      parseInt(el.dataset.entityId), el.dataset.entityName
+    ));
+    el.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') el.click();
+    });
+  });
+}
+
 function renderEntitiesGrid(entities) {
   const grid = document.getElementById('entities-grid');
+  const list = document.getElementById('entities-list');
   const count = document.getElementById('entities-count');
 
+  grid.classList.toggle('d-none', state.entitiesView !== 'grid');
+  list.classList.toggle('d-none', state.entitiesView !== 'list');
+  const target = state.entitiesView === 'list' ? list : grid;
+
   if (!entities.length) {
-    grid.innerHTML = `<div class="text-center text-muted py-5 col-12">
+    target.innerHTML = `<div class="text-center text-muted py-5 col-12">
       <i class="fa-solid fa-face-sad-tear fa-2x mb-2"></i>
       <p>No entities found.</p></div>`;
     count.textContent = '';
@@ -817,6 +858,19 @@ function renderEntitiesGrid(entities) {
   }
 
   count.textContent = `${entities.length} entit${entities.length !== 1 ? 'ies' : 'y'}`;
+
+  if (state.entitiesView === 'list') {
+    list.innerHTML = entities.map(entity => {
+      const typeLabel = TYPE_LABELS[entity.type] || entity.type;
+      return `<div class="entity-list-row" data-entity-id="${entity.id}" data-entity-name="${escHtml(entity.name)}"
+                   tabindex="0" role="button" aria-label="Login as ${escHtml(entity.name)}">
+        <div class="entity-list-name">${escHtml(entity.name)}</div>
+        <span class="entity-type-badge">${escHtml(typeLabel)}</span>
+      </div>`;
+    }).join('');
+    wireEntityLoginTriggers(list, '.entity-list-row');
+    return;
+  }
 
   grid.innerHTML = entities.map(entity => {
     // Use a Font Awesome icon + initial instead of storing a logo
@@ -829,20 +883,25 @@ function renderEntitiesGrid(entities) {
       <div class="entity-name">${escHtml(entity.name)}</div>
     </div>`;
   }).join('');
-
-  grid.querySelectorAll('.entity-tile').forEach(tile => {
-    tile.addEventListener('click', () => openEntityLoginModal(
-      parseInt(tile.dataset.entityId), tile.dataset.entityName
-    ));
-    tile.addEventListener('keydown', e => {
-      if (e.key === 'Enter' || e.key === ' ') tile.click();
-    });
-  });
+  wireEntityLoginTriggers(grid, '.entity-tile');
 }
 
 // Entity search/filter
 document.getElementById('entity-search').addEventListener('input', applyEntityFilters);
 document.getElementById('entity-type-filter').addEventListener('change', applyEntityFilters);
+
+document.getElementById('entities-view-grid').addEventListener('click', () => {
+  state.entitiesView = 'grid';
+  document.getElementById('entities-view-grid').classList.add('active');
+  document.getElementById('entities-view-list').classList.remove('active');
+  applyEntityFilters();
+});
+document.getElementById('entities-view-list').addEventListener('click', () => {
+  state.entitiesView = 'list';
+  document.getElementById('entities-view-list').classList.add('active');
+  document.getElementById('entities-view-grid').classList.remove('active');
+  applyEntityFilters();
+});
 
 function openEntityLoginModal(entityId, entityName) {
   state.pendingLoginEntity = { id: entityId, name: entityName };
@@ -898,6 +957,7 @@ function onEntityLogin() {
 
 function unlockEntityFeatures() {
   document.getElementById('create-event-section').classList.remove('d-none');
+  document.getElementById('my-events-section').classList.remove('d-none');
   // Populate locations for entity create-event form
   (async () => {
     try {
@@ -911,6 +971,44 @@ function unlockEntityFeatures() {
       // ignore
     }
   })();
+  loadMyEvents();
+}
+
+// An entity's own events (past and upcoming, most recent first) with edit/delete -- previously
+// entities could only create events, never see or manage the ones they'd already posted, and had
+// to ask an admin to fix a typo or cancel something.
+async function loadMyEvents() {
+  const listEl = document.getElementById('my-events-list');
+  if (!state.loggedInEntity) return;
+
+  const { ok, data } = await apiFetch(`/api/events?entity_id=${state.loggedInEntity.id}`);
+  const events = ok ? (data.events || []) : [];
+
+  if (!events.length) {
+    listEl.innerHTML = '<p class="text-muted small">No events yet.</p>';
+    return;
+  }
+
+  listEl.innerHTML = events.map(ev => `
+    <div class="event-list-item">
+      <div class="ev-info">
+        <div class="ev-title-txt">${escHtml(ev.title)}</div>
+        <div class="ev-meta-txt">${new Date(ev.start_datetime).toLocaleString()}${ev.location_name ? ' · ' + escHtml(ev.location_name) : ''}</div>
+      </div>
+      <button class="btn btn-sm btn-outline-secondary me-1" data-edit-event="${ev.id}" title="Edit event">
+        <i class="fa-solid fa-pen"></i>
+      </button>
+      <button class="btn btn-sm btn-outline-danger" data-delete-event="${ev.id}">
+        <i class="fa-solid fa-trash"></i>
+      </button>
+    </div>`).join('');
+
+  listEl.querySelectorAll('[data-edit-event]').forEach(btn => {
+    btn.addEventListener('click', () => openEditEventModal(parseInt(btn.dataset.editEvent)));
+  });
+  listEl.querySelectorAll('[data-delete-event]').forEach(btn => {
+    btn.addEventListener('click', () => deleteEventById(parseInt(btn.dataset.deleteEvent)));
+  });
 }
 
 // Forces the entity to set a new password before the rest of the page unlocks. Used after
@@ -932,6 +1030,7 @@ document.getElementById('btn-entity-logout').addEventListener('click', () => {
   state.loggedInEntity = null;
   document.getElementById('entity-login-banner').classList.add('d-none');
   document.getElementById('create-event-section').classList.add('d-none');
+  document.getElementById('my-events-section').classList.add('d-none');
 });
 
 document.getElementById('btn-change-pw').addEventListener('click', () => {
@@ -1013,6 +1112,12 @@ document.getElementById('create-event-form').addEventListener('submit', async fu
     end_datetime:   document.getElementById('ev-end').value,
   };
 
+  if (!isValidEventRange(payload.start_datetime, payload.end_datetime)) {
+    showAlert('create-event-msg', 'End time must be after start time');
+    btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-plus me-1"></i>Create Event';
+    return;
+  }
+
   const { ok, data } = await apiFetch('/api/events', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -1077,14 +1182,27 @@ async function loadAdminData() {
   const { ok, data } = await apiFetch('/api/entities');
   const entities = ok ? (data.entities || []) : [];
 
-  // Populate entity select
+  // Populate entity select, grouped by type instead of one flat alphabetical list -- with 50+
+  // entities now, scanning for one by scrolling a single giant list got unwieldy.
   const sel = document.getElementById('adm-ev-entity');
-  sel.innerHTML = `<option value="">– select entity –</option>` +
-    entities.map(en => `<option value="${en.id}">${escHtml(en.name)}</option>`).join('');
+  const ENTITY_TYPE_ORDER = ['club', 'department', 'office', 'organization', 'program'];
+  const groupedEntities = ENTITY_TYPE_ORDER
+    .map(type => ({ type, label: TYPE_LABELS[type] || type, items: entities.filter(en => en.type === type) }))
+    .filter(g => g.items.length);
+  const knownTypes = new Set(ENTITY_TYPE_ORDER);
+  const otherEntities = entities.filter(en => !knownTypes.has(en.type));
+  if (otherEntities.length) groupedEntities.push({ type: 'other', label: 'Other', items: otherEntities });
 
-  // Populate locations for admin event form
+  sel.innerHTML = `<option value="">– select entity –</option>` +
+    groupedEntities.map(g => `<optgroup label="${escHtml(g.label)}s">` +
+      g.items.map(en => `<option value="${en.id}">${escHtml(en.name)}</option>`).join('') +
+      `</optgroup>`
+    ).join('');
+
+  // Populate locations for admin event form + the locations list below
+  let locations = [];
   try {
-    const locations = await fetchLocations();
+    locations = await fetchLocations();
     const locSel = document.getElementById('adm-ev-location');
     if (locSel) {
       locSel.innerHTML = `<option value="">– select location –</option>` +
@@ -1130,14 +1248,64 @@ async function loadAdminData() {
     enList.innerHTML = '<p class="text-muted small">No entities yet.</p>';
   }
 
+  // Locations list – entity-or-admin can rename (matching who can create one), admin-only delete
+  const locList = document.getElementById('admin-locations-list');
+  if (locations.length) {
+    locList.innerHTML = locations.map(loc => `
+      <div class="event-list-item">
+        <div class="ev-info">
+          <div class="ev-title-txt">${escHtml(loc.name)}</div>
+        </div>
+        <button class="btn btn-sm btn-outline-secondary me-1" data-edit-location="${loc.id}" data-edit-location-name="${escHtml(loc.name)}" title="Edit location">
+          <i class="fa-solid fa-pen"></i>
+        </button>
+        <button class="btn btn-sm btn-outline-danger" data-delete-location="${loc.id}" title="Delete location">
+          <i class="fa-solid fa-trash"></i>
+        </button>
+      </div>`).join('');
+
+    locList.querySelectorAll('[data-delete-location]').forEach(btn => {
+      btn.addEventListener('click', () => adminDeleteLocation(parseInt(btn.dataset.deleteLocation)));
+    });
+    locList.querySelectorAll('[data-edit-location]').forEach(btn => {
+      btn.addEventListener('click', () => openEditLocationModal(parseInt(btn.dataset.editLocation), btn.dataset.editLocationName));
+    });
+  } else {
+    locList.innerHTML = '<p class="text-muted small">No locations yet.</p>';
+  }
+
   // Events list
   loadAdminEvents();
 }
 
+// The admin Events list used to only ever show events from "now" onward, with no way to reach
+// a past event to edit/delete it. This computes a browsable week/month range instead, anchored
+// on state.adminEventsAnchorDate, so Prev/Next/Today can navigate to any period, past included.
+function adminEventsRange() {
+  const anchor = state.adminEventsAnchorDate;
+  if (state.adminEventsView === 'month') {
+    const monthStart = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+    const monthEnd = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
+    return {
+      start: startOfDay(monthStart),
+      end: addDays(startOfDay(monthEnd), 1),
+      label: fmt(monthStart, { month: 'long', year: 'numeric' }),
+    };
+  }
+  const ws = getWeekStart(anchor);
+  return {
+    start: ws,
+    end: addDays(ws, 7),
+    label: `${fmt(ws, { month: 'short', day: 'numeric' })} – ${fmt(addDays(ws, 6), { month: 'short', day: 'numeric', year: 'numeric' })}`,
+  };
+}
+
 async function loadAdminEvents() {
   const evList = document.getElementById('admin-events-list');
-  const now = new Date();
-  const { ok, data } = await apiFetch(`/api/events?start=${isoLocal(now)}`);
+  const { start, end, label } = adminEventsRange();
+  document.getElementById('adm-ev-range-label').textContent = label;
+
+  const { ok, data } = await apiFetch(`/api/events?start=${isoLocal(start)}&end=${isoLocal(end)}`);
   const events = ok ? (data.events || []) : [];
 
   if (events.length) {
@@ -1156,15 +1324,44 @@ async function loadAdminEvents() {
       </div>`).join('');
 
     evList.querySelectorAll('[data-delete-event]').forEach(btn => {
-      btn.addEventListener('click', () => adminDeleteEvent(parseInt(btn.dataset.deleteEvent)));
+      btn.addEventListener('click', () => deleteEventById(parseInt(btn.dataset.deleteEvent)));
     });
     evList.querySelectorAll('[data-edit-event]').forEach(btn => {
       btn.addEventListener('click', () => openEditEventModal(parseInt(btn.dataset.editEvent)));
     });
   } else {
-    evList.innerHTML = '<p class="text-muted small">No upcoming events.</p>';
+    evList.innerHTML = '<p class="text-muted small">No events in this range.</p>';
   }
 }
+
+document.getElementById('adm-ev-prev').addEventListener('click', () => {
+  state.adminEventsAnchorDate = state.adminEventsView === 'month'
+    ? new Date(state.adminEventsAnchorDate.getFullYear(), state.adminEventsAnchorDate.getMonth() - 1, 1)
+    : addDays(state.adminEventsAnchorDate, -7);
+  loadAdminEvents();
+});
+document.getElementById('adm-ev-next').addEventListener('click', () => {
+  state.adminEventsAnchorDate = state.adminEventsView === 'month'
+    ? new Date(state.adminEventsAnchorDate.getFullYear(), state.adminEventsAnchorDate.getMonth() + 1, 1)
+    : addDays(state.adminEventsAnchorDate, 7);
+  loadAdminEvents();
+});
+document.getElementById('adm-ev-today').addEventListener('click', () => {
+  state.adminEventsAnchorDate = new Date();
+  loadAdminEvents();
+});
+document.getElementById('adm-ev-view-week').addEventListener('click', () => {
+  state.adminEventsView = 'week';
+  document.getElementById('adm-ev-view-week').classList.add('active');
+  document.getElementById('adm-ev-view-month').classList.remove('active');
+  loadAdminEvents();
+});
+document.getElementById('adm-ev-view-month').addEventListener('click', () => {
+  state.adminEventsView = 'month';
+  document.getElementById('adm-ev-view-month').classList.add('active');
+  document.getElementById('adm-ev-view-week').classList.remove('active');
+  loadAdminEvents();
+});
 
 // Create entity (admin)
 document.getElementById('create-entity-form').addEventListener('submit', async function (e) {
@@ -1186,6 +1383,154 @@ document.getElementById('create-entity-form').addEventListener('submit', async f
 
   if (!ok) { showAlert('create-entity-msg', data.error || 'Failed to create entity'); return; }
   showAlert('create-entity-msg', 'Entity created!', 'success');
+  this.reset();
+  loadAdminData();
+});
+
+// Same alphabet reset-password.js uses server-side (avoids visually ambiguous characters like
+// 0/O and 1/l/I, since these are often relayed by reading them aloud or over text/email).
+const TEMP_PASSWORD_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+function generateTempPasswordClient(length = 12) {
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, b => TEMP_PASSWORD_ALPHABET[b % TEMP_PASSWORD_ALPHABET.length]).join('');
+}
+
+// Bulk import entities (admin). Runs entirely in the admin's own already-authenticated browser
+// session, one POST /api/entities per name, reusing the exact same validation/uniqueness rules
+// as creating one by hand instead of a separate code path that could drift from them.
+document.getElementById('bulk-import-form').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideAlert('bulk-import-msg');
+  const btn = this.querySelector('button[type=submit]');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span> Importing…';
+  document.getElementById('bulk-import-results').innerHTML = '';
+
+  const type = document.getElementById('bulk-import-type').value;
+  const names = document.getElementById('bulk-import-names').value
+    .split('\n')
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  if (!names.length) {
+    showAlert('bulk-import-msg', 'Enter at least one name');
+    btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-file-import me-1"></i>Import';
+    return;
+  }
+
+  const results = [];
+  for (const name of names) {
+    const password = generateTempPasswordClient();
+    const { ok, status, data } = await apiFetch('/api/entities', {
+      method: 'POST',
+      body: JSON.stringify({ name, type, password }),
+    });
+    if (ok) {
+      results.push({ name, status: 'created', password });
+    } else if (status === 409) {
+      results.push({ name, status: 'already existed', password: '' });
+    } else {
+      results.push({ name, status: `failed: ${data.error || status}`, password: '' });
+    }
+  }
+
+  btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-file-import me-1"></i>Import';
+
+  const created = results.filter(r => r.status === 'created').length;
+  const skipped = results.filter(r => r.status === 'already existed').length;
+  const failed = results.length - created - skipped;
+  showAlert('bulk-import-msg', `${created} created, ${skipped} already existed, ${failed} failed.`, failed ? 'danger' : 'success');
+
+  const resultsEl = document.getElementById('bulk-import-results');
+  resultsEl.innerHTML = `
+    <div class="table-responsive">
+      <table class="table table-sm">
+        <thead><tr><th>Name</th><th>Status</th><th>Temp Password</th></tr></thead>
+        <tbody>
+          ${results.map(r => `<tr>
+            <td>${escHtml(r.name)}</td>
+            <td>${escHtml(r.status)}</td>
+            <td>${r.password ? `<code>${escHtml(r.password)}</code>` : ''}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <button type="button" class="btn btn-sm btn-outline-secondary" id="bulk-import-download-csv">
+      <i class="fa-solid fa-download me-1"></i>Download CSV
+    </button>
+  `;
+
+  document.getElementById('bulk-import-download-csv').addEventListener('click', () => {
+    const csv = ['name,status,temp_password']
+      .concat(results.map(r => [r.name, r.status, r.password].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `entity-import-${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  this.reset();
+  loadAdminData();
+});
+
+// Bulk import locations (admin). Same pattern as bulk-importing entities: runs through the
+// existing POST /api/locations one name at a time from the admin's own authenticated session,
+// treating "already exists" (409) as a skip rather than a failure.
+document.getElementById('bulk-import-locations-form').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideAlert('bulk-import-locations-msg');
+  const btn = this.querySelector('button[type=submit]');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span> Importing…';
+  document.getElementById('bulk-import-locations-results').innerHTML = '';
+
+  const names = document.getElementById('bulk-import-locations-names').value
+    .split('\n')
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  if (!names.length) {
+    showAlert('bulk-import-locations-msg', 'Enter at least one name');
+    btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-file-import me-1"></i>Import';
+    return;
+  }
+
+  const results = [];
+  for (const name of names) {
+    const { ok, status, data } = await apiFetch('/api/locations', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    });
+    if (ok) {
+      results.push({ name, status: 'created' });
+    } else if (status === 409) {
+      results.push({ name, status: 'already existed' });
+    } else {
+      results.push({ name, status: `failed: ${data.error || status}` });
+    }
+  }
+
+  btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-file-import me-1"></i>Import';
+
+  const created = results.filter(r => r.status === 'created').length;
+  const skipped = results.filter(r => r.status === 'already existed').length;
+  const failed = results.length - created - skipped;
+  showAlert('bulk-import-locations-msg', `${created} created, ${skipped} already existed, ${failed} failed.`, failed ? 'danger' : 'success');
+
+  document.getElementById('bulk-import-locations-results').innerHTML = `
+    <div class="table-responsive">
+      <table class="table table-sm">
+        <thead><tr><th>Name</th><th>Status</th></tr></thead>
+        <tbody>
+          ${results.map(r => `<tr><td>${escHtml(r.name)}</td><td>${escHtml(r.status)}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+
   this.reset();
   loadAdminData();
 });
@@ -1212,6 +1557,14 @@ document.getElementById('admin-create-event-form').addEventListener('submit', as
     location_id = parseInt(sel.value);
   }
 
+  const adm_start = document.getElementById('adm-ev-start').value;
+  const adm_end = document.getElementById('adm-ev-end').value;
+  if (!isValidEventRange(adm_start, adm_end)) {
+    showAlert('adm-create-event-msg', 'End time must be after start time');
+    btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-plus me-1"></i>Create Event';
+    return;
+  }
+
   const { ok, data } = await apiFetch('/api/events', {
     method: 'POST',
     body: JSON.stringify({
@@ -1219,8 +1572,8 @@ document.getElementById('admin-create-event-form').addEventListener('submit', as
       title:          document.getElementById('adm-ev-title').value.trim(),
       description:    document.getElementById('adm-ev-desc').value.trim(),
       location_id,
-      start_datetime: document.getElementById('adm-ev-start').value,
-      end_datetime:   document.getElementById('adm-ev-end').value,
+      start_datetime: adm_start,
+      end_datetime:   adm_end,
     }),
   });
 
@@ -1271,6 +1624,41 @@ document.getElementById('edit-entity-form').addEventListener('submit', async fun
   loadAdminData();
 });
 
+// Delete location (admin only; events referencing it just lose their location, not deleted)
+async function adminDeleteLocation(id) {
+  if (!confirm('Delete this location? Any events using it will keep their date/time but lose the location.')) return;
+  const { ok, data } = await apiFetch(`/api/locations/${id}`, { method: 'DELETE' });
+  if (!ok) { alert(data.error || 'Failed to delete location'); return; }
+  loadAdminData();
+}
+
+// Edit location (rename)
+function openEditLocationModal(id, name) {
+  document.getElementById('edit-loc-id').value = id;
+  document.getElementById('edit-loc-name').value = name;
+  hideAlert('edit-location-msg');
+  new bootstrap.Modal(document.getElementById('editLocationModal')).show();
+}
+
+document.getElementById('edit-location-form').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideAlert('edit-location-msg');
+  const btn = this.querySelector('button[type=submit]');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span>';
+
+  const id = document.getElementById('edit-loc-id').value;
+  const { ok, data } = await apiFetch(`/api/locations/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ name: document.getElementById('edit-loc-name').value.trim() }),
+  });
+
+  btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Save Changes';
+
+  if (!ok) { showAlert('edit-location-msg', data.error || 'Failed to update location'); return; }
+  bootstrap.Modal.getInstance(document.getElementById('editLocationModal')).hide();
+  loadAdminData();
+});
+
 // Reset an entity's password (e.g. when its point of contact changes). The old password stops
 // working immediately; the new temp password is shown once and the entity must set their own
 // on next login.
@@ -1299,12 +1687,22 @@ document.getElementById('btn-copy-reset-pw').addEventListener('click', async () 
   setTimeout(() => hideAlert('reset-pw-copied-msg'), 2000);
 });
 
-// Delete event
-async function adminDeleteEvent(id) {
+// Refreshes whichever event list(s) are currently relevant -- admin and entity logins are
+// mutually exclusive in this app, so at most one of these actually does anything, but the edit
+// modal and delete button are shared between the admin Events list and an entity's My Events
+// list, and don't know which context they were opened from.
+function refreshEventLists() {
+  if (state.loggedInEntity) loadMyEvents();
+  if (state.adminToken) loadAdminEvents();
+}
+
+// Delete event (shared by the admin Events list and an entity's own My Events list -- the API
+// already permits either an admin or the owning entity)
+async function deleteEventById(id) {
   if (!confirm('Delete this event?')) return;
   const { ok, data } = await apiFetch(`/api/events/${id}`, { method: 'DELETE' });
   if (!ok) { alert(data.error || 'Failed to delete event'); return; }
-  loadAdminEvents();
+  refreshEventLists();
 }
 
 // Edit event (title / description / location / start / end – entity can't be changed)
@@ -1354,14 +1752,22 @@ document.getElementById('edit-event-form').addEventListener('submit', async func
   }
   // else: sel.value === "" (the "No location" option) -> location_id stays null, clearing it.
 
+  const edit_start = document.getElementById('edit-ev-start').value;
+  const edit_end = document.getElementById('edit-ev-end').value;
+  if (!isValidEventRange(edit_start, edit_end)) {
+    showAlert('edit-event-msg', 'End time must be after start time');
+    btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Save Changes';
+    return;
+  }
+
   const { ok, data } = await apiFetch(`/api/events/${id}`, {
     method: 'PUT',
     body: JSON.stringify({
       title:          document.getElementById('edit-ev-title').value.trim(),
       description:    document.getElementById('edit-ev-desc').value.trim(),
       location_id,
-      start_datetime: document.getElementById('edit-ev-start').value,
-      end_datetime:   document.getElementById('edit-ev-end').value,
+      start_datetime: edit_start,
+      end_datetime:   edit_end,
     }),
   });
 
@@ -1369,7 +1775,7 @@ document.getElementById('edit-event-form').addEventListener('submit', async func
 
   if (!ok) { showAlert('edit-event-msg', data.error || 'Failed to update event'); return; }
   bootstrap.Modal.getInstance(document.getElementById('editEventModal')).hide();
-  loadAdminEvents();
+  refreshEventLists();
 });
 
 /* =============================================================

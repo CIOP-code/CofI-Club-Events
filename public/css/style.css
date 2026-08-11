@@ -58,9 +58,18 @@ body {
 }
 
 /* ---- Scrollbar ---- */
-::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar { width: 12px; height: 12px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--color-scroll); border-radius: 3px; }
+::-webkit-scrollbar-thumb {
+  background: var(--color-scroll);
+  border-radius: 7px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--coi-blue);
+  background-clip: padding-box;
+}
 
 /* ===================================================
    LAYOUT
@@ -551,6 +560,9 @@ body {
 .cal-event .ev-title { font-weight: 600; }
 .cal-event .ev-entity { opacity: .85; font-size: .66rem; }
 .cal-event .ev-location { opacity: .9; font-size: .68rem; margin-top: 2px; }
+/* Only actually visible when the block is tall enough -- .cal-event's overflow:hidden clips it
+   otherwise, so short events aren't crowded and tall ones get the extra context for free. */
+.cal-event .ev-desc { opacity: .8; font-size: .64rem; margin-top: 2px; }
 
 .cal-event-overflow {
   display: flex;
@@ -573,11 +585,13 @@ body {
    =================================================== */
 .entities-filter {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   align-items: center;
   padding: 0 16px;
   margin-bottom: 16px;
 }
+.entities-view-toggle { display: flex; gap: 4px; margin-left: auto; }
 .entities-filter input {
   border-radius: 8px;
   border: 1px solid var(--color-border);
@@ -656,6 +670,42 @@ body {
   border-radius: 5px;
   background: var(--coi-light);
   color: var(--coi-blue);
+}
+
+/* Compact alternative to .entities-grid for scanning a long roster (e.g. 50+ clubs) at once
+   instead of paging through icon tiles. */
+.entities-list {
+  padding: 0 16px;
+}
+.entity-list-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background .15s;
+}
+.entity-list-row:hover { background: var(--coi-light); }
+.entity-list-row:last-child { border-bottom: none; }
+.entity-list-row .entity-list-name {
+  font-size: .88rem;
+  font-weight: 600;
+  color: var(--color-strong);
+  flex: 1;
+}
+.entity-list-row .entity-type-badge {
+  position: static;
+  font-size: .62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .02em;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: var(--coi-light);
+  color: var(--coi-blue);
+  flex-shrink: 0;
 }
 
 /* Logged-in entity banner */

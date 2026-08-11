@@ -21,7 +21,8 @@ export async function onRequestGet({ env, params }) {
     if (!entity) return json({ error: 'Entity not found' }, 404);
     return json({ entity });
   } catch (err) {
-    return json({ error: err.message }, 500);
+    console.error(err);
+    return json({ error: 'Internal server error' }, 500);
   }
 }
 
@@ -48,7 +49,8 @@ export async function onRequestPut({ env, request, params, data }) {
     ).bind(name || null, type || null, id).run();
     return json({ message: 'Entity updated' });
   } catch (err) {
-    return json({ error: err.message }, 500);
+    console.error(err);
+    return json({ error: 'Internal server error' }, 500);
   }
 }
 
@@ -61,6 +63,7 @@ export async function onRequestDelete({ env, params, data }) {
     await env.DB.prepare('DELETE FROM entities WHERE id = ?').bind(id).run();
     return json({ message: 'Entity deleted' });
   } catch (err) {
-    return json({ error: err.message }, 500);
+    console.error(err);
+    return json({ error: 'Internal server error' }, 500);
   }
 }

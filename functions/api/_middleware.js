@@ -3,6 +3,7 @@
  * Adds CORS headers and attaches the decoded JWT payload to context.data.user.
  */
 import { verifyToken, extractToken } from '../utils/jwt.js';
+import { requireEnv } from '../utils/env.js';
 
 export async function onRequest(context) {
   const { request, env, next } = context;
@@ -18,7 +19,15 @@ export async function onRequest(context) {
   // Attach decoded user (if token present)
   const token = extractToken(request);
   if (token) {
-    const secret = env.JWT_SECRET || 'change-this-secret-in-production';
+    let secret;
+    try {
+      secret = requireEnv(env, 'JWT_SECRET');
+    } catch (err) {
+      return new Response(JSON.stringify({ error: err.message }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders() },
+      });
+    }
     context.data.user = await verifyToken(token, secret);
   }
 

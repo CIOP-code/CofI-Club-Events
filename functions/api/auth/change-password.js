@@ -25,8 +25,8 @@ export async function onRequestPost({ env, request, data }) {
   if (!current_password || !new_password) {
     return json({ error: 'current_password and new_password are required' }, 400);
   }
-  if (new_password.length < 6) {
-    return json({ error: 'New password must be at least 6 characters' }, 400);
+  if (new_password.length < 8) {
+    return json({ error: 'New password must be at least 8 characters' }, 400);
   }
 
   try {
@@ -48,6 +48,7 @@ export async function onRequestPost({ env, request, data }) {
 
     return json({ message: 'Password changed successfully' });
   } catch (err) {
-    return json({ error: err.message }, 500);
+    console.error(err);
+    return json({ error: 'Internal server error' }, 500);
   }
 }

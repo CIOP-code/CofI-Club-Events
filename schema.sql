@@ -40,6 +40,16 @@ CREATE TABLE IF NOT EXISTS admin (
   salt          TEXT NOT NULL
 );
 
+-- Failed login attempts, for rate limiting /api/auth/admin and /api/auth/entity (see
+-- functions/utils/rateLimit.js). Rows older than a day are opportunistically deleted on write.
+CREATE TABLE IF NOT EXISTS login_attempts (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  ip           TEXT NOT NULL,
+  endpoint     TEXT NOT NULL,
+  attempted_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_login_attempts_lookup ON login_attempts(ip, endpoint, attempted_at);
+
 -- Notes:
 -- - Entity logos are not stored; display a Font Awesome icon and initial instead.
 -- - Events reference a campus location (locations table). The UI allows selecting or creating locations.
