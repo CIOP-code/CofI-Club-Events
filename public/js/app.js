@@ -306,14 +306,23 @@ async function fetchLocations() {
   return ok ? (data.locations || []) : [];
 }
 
+// Get-or-create by name: despite the POST endpoint rejecting a duplicate name with a 409 (the
+// right behavior for the deliberate Create Location form, where a duplicate is a mistake worth
+// flagging), callers of this helper are asking for a location's id, not necessarily to create a
+// new row -- a 409 here means "someone already made this one," which should resolve the same as
+// if it never conflicted, not fail the event they were trying to save.
 async function ensureLocation(newName) {
   const token = state.loggedInEntity?.token || state.adminToken;
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch('/api/locations', { method: 'POST', headers, body: JSON.stringify({ name: newName }) });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Failed to create location');
-  return data.id;
+  if (res.ok) return data.id;
+  if (res.status === 409) {
+    const existing = (await fetchLocations()).find(l => l.name.toLowerCase() === newName.trim().toLowerCase());
+    if (existing) return existing.id;
+  }
+  throw new Error(data.error || 'Failed to create location');
 }
 
 /* =============================================================
@@ -1488,6 +1497,28 @@ document.getElementById('bulk-import-form').addEventListener('submit', async fun
   loadAdminData();
 });
 
+// Create a single location (admin). Unlike ensureLocation() (used inline from the event forms,
+// which silently reuses an existing name), this is a deliberate create action, so a 409 is
+// reported as an error rather than treated as success.
+document.getElementById('create-location-form').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideAlert('create-location-msg');
+  const btn = this.querySelector('button[type=submit]');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span>';
+
+  const { ok, data } = await apiFetch('/api/locations', {
+    method: 'POST',
+    body: JSON.stringify({ name: document.getElementById('loc-name').value.trim() }),
+  });
+
+  btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-plus me-1"></i>Create Location';
+
+  if (!ok) { showAlert('create-location-msg', data.error || 'Failed to create location'); return; }
+  showAlert('create-location-msg', 'Location created!', 'success');
+  this.reset();
+  loadAdminData();
+});
+
 // Bulk import locations (admin). Same pattern as bulk-importing entities: runs through the
 // existing POST /api/locations one name at a time from the admin's own authenticated session,
 // treating "already exists" (409) as a skip rather than a failure.
@@ -1544,6 +1575,118 @@ document.getElementById('bulk-import-locations-form').addEventListener('submit',
 
   this.reset();
   loadAdminData();
+});
+
+// Bulk import events (admin). Each line is "Entity | Title | Start | End | Location | Type |
+// Description", pipe-delimited rather than comma-delimited since titles/descriptions routinely
+// contain commas. Entities are resolved by name (must already exist -- create it first, same as
+// the single Create Event form requires picking one from the dropdown); locations are created
+// automatically if new, matching ensureLocation()'s behavior elsewhere. One POST /api/events per
+// row, same validation as creating one by hand, so this can't drift from those rules.
+function normalizeBulkDatetime(raw) {
+  const s = (raw || '').trim().replace(' ', 'T');
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(s) ? s : null;
+}
+
+document.getElementById('bulk-import-events-form').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideAlert('bulk-import-events-msg');
+  const btn = this.querySelector('button[type=submit]');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span> Importing…';
+  document.getElementById('bulk-import-events-results').innerHTML = '';
+
+  const lines = document.getElementById('bulk-import-events-rows').value
+    .split('\n')
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  if (!lines.length) {
+    showAlert('bulk-import-events-msg', 'Enter at least one row');
+    btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-file-import me-1"></i>Import';
+    return;
+  }
+
+  const { ok: entOk, data: entData } = await apiFetch('/api/entities');
+  const entitiesByName = new Map((entOk ? entData.entities || [] : []).map(en => [en.name.toLowerCase(), en]));
+
+  const results = [];
+  for (const line of lines) {
+    const [entityName, title, startRaw, endRaw, locationName, typeRaw, description] =
+      line.split('|').map(s => s.trim());
+
+    if (!entityName || !title || !startRaw || !endRaw) {
+      results.push({ line, status: 'failed: entity, title, start, and end are required' });
+      continue;
+    }
+
+    const entity = entitiesByName.get(entityName.toLowerCase());
+    if (!entity) {
+      results.push({ line, status: `failed: unknown entity "${entityName}"` });
+      continue;
+    }
+
+    const start_datetime = normalizeBulkDatetime(startRaw);
+    const end_datetime = normalizeBulkDatetime(endRaw);
+    if (!start_datetime || !end_datetime) {
+      results.push({ line, status: 'failed: start/end must be YYYY-MM-DD HH:MM' });
+      continue;
+    }
+    if (!isValidEventRange(start_datetime, end_datetime)) {
+      results.push({ line, status: 'failed: end must be after start' });
+      continue;
+    }
+
+    const event_type = typeRaw ? typeRaw.toLowerCase() : 'other';
+    if (!EVENT_TYPE_LABELS[event_type]) {
+      results.push({ line, status: `failed: unknown event type "${typeRaw}"` });
+      continue;
+    }
+
+    let location_id = null;
+    if (locationName) {
+      try {
+        location_id = await ensureLocation(locationName);
+      } catch (err) {
+        results.push({ line, status: `failed: ${err.message}` });
+        continue;
+      }
+    }
+
+    const { ok, data } = await apiFetch('/api/events', {
+      method: 'POST',
+      body: JSON.stringify({
+        entity_id: entity.id,
+        title,
+        description: description || '',
+        location_id,
+        start_datetime,
+        end_datetime,
+        event_type,
+      }),
+    });
+    results.push({ line, status: ok ? `created: ${title}` : `failed: ${data.error || 'unknown error'}` });
+  }
+
+  btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-file-import me-1"></i>Import';
+
+  const created = results.filter(r => r.status.startsWith('created')).length;
+  const failed = results.length - created;
+  showAlert('bulk-import-events-msg', `${created} created, ${failed} failed.`, failed ? 'danger' : 'success');
+
+  document.getElementById('bulk-import-events-results').innerHTML = `
+    <div class="table-responsive">
+      <table class="table table-sm">
+        <thead><tr><th>Row</th><th>Result</th></tr></thead>
+        <tbody>
+          ${results.map(r => `<tr><td><code>${escHtml(r.line)}</code></td><td>${escHtml(r.status)}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  this.reset();
+  loadAdminData();
+  loadAdminEvents();
 });
 
 // Export a PDF list of events in a date range, optionally filtered to one type -- e.g. a
@@ -1889,6 +2032,20 @@ document.querySelectorAll('#admin-subnav [data-admin-section]').forEach(btn => {
     document.querySelectorAll('.admin-section').forEach(sec => sec.classList.add('d-none'));
     document.getElementById(`admin-section-${btn.dataset.adminSection}`).classList.remove('d-none');
     if (btn.dataset.adminSection === 'roadmap') renderAdminRoadmap();
+  });
+});
+
+// Second-level tabs within Events/Entities/Locations (Create/Import/Export) -- same show/hide
+// pattern as the top-level admin-subnav, just scoped to whichever section owns the clicked pill.
+document.querySelectorAll('[data-subnav-scope]').forEach(nav => {
+  const scope = nav.dataset.subnavScope;
+  nav.querySelectorAll('[data-sub-section]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      nav.querySelectorAll('[data-sub-section]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll(`.admin-subsection[data-scope="${scope}"]`).forEach(sec => sec.classList.add('d-none'));
+      document.getElementById(`admin-sub-${btn.dataset.subSection}`).classList.remove('d-none');
+    });
   });
 });
 

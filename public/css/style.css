@@ -790,7 +790,7 @@ body {
   padding: 22px;
   margin-bottom: 20px;
 }
-#admin-actions{
+.admin-subsection {
   margin-left: 0px;
   margin-right: 0px;
 }
@@ -812,6 +812,26 @@ body {
 .admin-subnav .nav-link.active {
   background: var(--coi-blue);
   color: var(--color-surface);
+}
+
+.admin-subnav2 {
+  margin-bottom: 16px;
+  gap: 6px;
+}
+.admin-subnav2 .nav-link {
+  color: var(--color-muted-2);
+  font-weight: 600;
+  font-size: .82rem;
+  border-radius: 8px;
+  padding: 6px 14px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+}
+.admin-subnav2 .nav-link:hover { background: var(--color-border); }
+.admin-subnav2 .nav-link.active {
+  background: var(--coi-gold);
+  color: var(--coi-blue);
+  border-color: var(--coi-gold);
 }
 
 .roadmap-phase-header {
