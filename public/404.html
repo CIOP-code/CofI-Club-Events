@@ -303,10 +303,21 @@
                   </div>
                 </div>
 
-                <!-- Events list (admin can delete) -->
+                <!-- Events list (admin can edit/delete; browsable by week/month, not just upcoming,
+                     so past events are reachable too) -->
                 <div class="col-12">
                   <div class="section-card">
-                    <h4><i class="fa-solid fa-calendar-week me-2"></i>Upcoming Events</h4>
+                    <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
+                      <h4 class="mb-0 me-auto"><i class="fa-solid fa-calendar-week me-2"></i>Events</h4>
+                      <button class="cal-nav-btn" id="adm-ev-prev" title="Previous"><i class="fa-solid fa-chevron-left"></i></button>
+                      <button class="cal-nav-btn" id="adm-ev-today">Today</button>
+                      <button class="cal-nav-btn" id="adm-ev-next" title="Next"><i class="fa-solid fa-chevron-right"></i></button>
+                      <div class="view-toggle">
+                        <button class="cal-nav-btn active" id="adm-ev-view-week">Week</button>
+                        <button class="cal-nav-btn" id="adm-ev-view-month">Month</button>
+                      </div>
+                    </div>
+                    <p class="text-muted small mb-2" id="adm-ev-range-label"></p>
                     <div id="admin-events-list">Loading…</div>
                   </div>
                 </div>

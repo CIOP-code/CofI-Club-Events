@@ -79,6 +79,17 @@ function foldLine(line) {
   return result;
 }
 
+// "event-42.ics" gives no clue what's inside until opened. Slugify the title alongside the id
+// so a folder full of downloaded invites is actually distinguishable at a glance.
+function icsFilename(title, id) {
+  const slug = String(title || 'event')
+    .trim()
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60);
+  return `${slug || 'event'}-${id}.ics`;
+}
+
 export async function onRequestGet({ env, params, request }) {
   const { id } = params;
   const event = await env.DB.prepare(
@@ -119,7 +130,7 @@ export async function onRequestGet({ env, params, request }) {
     status: 200,
     headers: {
       'Content-Type': 'text/calendar; charset=utf-8',
-      'Content-Disposition': `attachment; filename="event-${event.id}.ics"`,
+      'Content-Disposition': `attachment; filename="${icsFilename(event.title, event.id)}"`,
     },
   });
 }

@@ -16,6 +16,8 @@ const state = {
   adminToken: null,
   pendingLoginEntity: null,  // entity object waiting for password
   forcedPasswordChange: false,  // true while the change-pw modal is a mandatory, non-dismissible flow
+  adminEventsView: 'week',            // 'week' | 'month' — browsable range for the admin Events list
+  adminEventsAnchorDate: new Date(),  // reference date for that range, so past events are reachable too
 };
 
 /* Ensure CSS variable for calendar header height matches the rendered size.
@@ -1147,10 +1149,34 @@ async function loadAdminData() {
   loadAdminEvents();
 }
 
+// The admin Events list used to only ever show events from "now" onward, with no way to reach
+// a past event to edit/delete it. This computes a browsable week/month range instead, anchored
+// on state.adminEventsAnchorDate, so Prev/Next/Today can navigate to any period, past included.
+function adminEventsRange() {
+  const anchor = state.adminEventsAnchorDate;
+  if (state.adminEventsView === 'month') {
+    const monthStart = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+    const monthEnd = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
+    return {
+      start: startOfDay(monthStart),
+      end: addDays(startOfDay(monthEnd), 1),
+      label: fmt(monthStart, { month: 'long', year: 'numeric' }),
+    };
+  }
+  const ws = getWeekStart(anchor);
+  return {
+    start: ws,
+    end: addDays(ws, 7),
+    label: `${fmt(ws, { month: 'short', day: 'numeric' })} – ${fmt(addDays(ws, 6), { month: 'short', day: 'numeric', year: 'numeric' })}`,
+  };
+}
+
 async function loadAdminEvents() {
   const evList = document.getElementById('admin-events-list');
-  const now = new Date();
-  const { ok, data } = await apiFetch(`/api/events?start=${isoLocal(now)}`);
+  const { start, end, label } = adminEventsRange();
+  document.getElementById('adm-ev-range-label').textContent = label;
+
+  const { ok, data } = await apiFetch(`/api/events?start=${isoLocal(start)}&end=${isoLocal(end)}`);
   const events = ok ? (data.events || []) : [];
 
   if (events.length) {
@@ -1175,9 +1201,38 @@ async function loadAdminEvents() {
       btn.addEventListener('click', () => openEditEventModal(parseInt(btn.dataset.editEvent)));
     });
   } else {
-    evList.innerHTML = '<p class="text-muted small">No upcoming events.</p>';
+    evList.innerHTML = '<p class="text-muted small">No events in this range.</p>';
   }
 }
+
+document.getElementById('adm-ev-prev').addEventListener('click', () => {
+  state.adminEventsAnchorDate = state.adminEventsView === 'month'
+    ? new Date(state.adminEventsAnchorDate.getFullYear(), state.adminEventsAnchorDate.getMonth() - 1, 1)
+    : addDays(state.adminEventsAnchorDate, -7);
+  loadAdminEvents();
+});
+document.getElementById('adm-ev-next').addEventListener('click', () => {
+  state.adminEventsAnchorDate = state.adminEventsView === 'month'
+    ? new Date(state.adminEventsAnchorDate.getFullYear(), state.adminEventsAnchorDate.getMonth() + 1, 1)
+    : addDays(state.adminEventsAnchorDate, 7);
+  loadAdminEvents();
+});
+document.getElementById('adm-ev-today').addEventListener('click', () => {
+  state.adminEventsAnchorDate = new Date();
+  loadAdminEvents();
+});
+document.getElementById('adm-ev-view-week').addEventListener('click', () => {
+  state.adminEventsView = 'week';
+  document.getElementById('adm-ev-view-week').classList.add('active');
+  document.getElementById('adm-ev-view-month').classList.remove('active');
+  loadAdminEvents();
+});
+document.getElementById('adm-ev-view-month').addEventListener('click', () => {
+  state.adminEventsView = 'month';
+  document.getElementById('adm-ev-view-month').classList.add('active');
+  document.getElementById('adm-ev-view-week').classList.remove('active');
+  loadAdminEvents();
+});
 
 // Create entity (admin)
 document.getElementById('create-entity-form').addEventListener('submit', async function (e) {
