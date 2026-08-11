@@ -1398,6 +1398,64 @@ document.getElementById('bulk-import-form').addEventListener('submit', async fun
   loadAdminData();
 });
 
+// Bulk import locations (admin). Same pattern as bulk-importing entities: runs through the
+// existing POST /api/locations one name at a time from the admin's own authenticated session,
+// treating "already exists" (409) as a skip rather than a failure.
+document.getElementById('bulk-import-locations-form').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideAlert('bulk-import-locations-msg');
+  const btn = this.querySelector('button[type=submit]');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span> Importing…';
+  document.getElementById('bulk-import-locations-results').innerHTML = '';
+
+  const names = document.getElementById('bulk-import-locations-names').value
+    .split('\n')
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  if (!names.length) {
+    showAlert('bulk-import-locations-msg', 'Enter at least one name');
+    btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-file-import me-1"></i>Import';
+    return;
+  }
+
+  const results = [];
+  for (const name of names) {
+    const { ok, status, data } = await apiFetch('/api/locations', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    });
+    if (ok) {
+      results.push({ name, status: 'created' });
+    } else if (status === 409) {
+      results.push({ name, status: 'already existed' });
+    } else {
+      results.push({ name, status: `failed: ${data.error || status}` });
+    }
+  }
+
+  btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-file-import me-1"></i>Import';
+
+  const created = results.filter(r => r.status === 'created').length;
+  const skipped = results.filter(r => r.status === 'already existed').length;
+  const failed = results.length - created - skipped;
+  showAlert('bulk-import-locations-msg', `${created} created, ${skipped} already existed, ${failed} failed.`, failed ? 'danger' : 'success');
+
+  document.getElementById('bulk-import-locations-results').innerHTML = `
+    <div class="table-responsive">
+      <table class="table table-sm">
+        <thead><tr><th>Name</th><th>Status</th></tr></thead>
+        <tbody>
+          ${results.map(r => `<tr><td>${escHtml(r.name)}</td><td>${escHtml(r.status)}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  this.reset();
+  loadAdminData();
+});
+
 // Create event (admin)
 document.getElementById('admin-create-event-form').addEventListener('submit', async function (e) {
   e.preventDefault();

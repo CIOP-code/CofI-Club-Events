@@ -141,6 +141,9 @@ any admin-created entity); already-existing names are skipped, not treated as a 
 safe to re-run. The CLI version writes `scripts/seed-results-<timestamp>.csv` (git-ignored) mapping name → temporary password —
 handle it like the credentials it is, and delete it once distributed.
 
+The **Bulk Import Locations** card works the same way for the shared location list (one name per
+line, no password/type involved since locations don't have their own login).
+
 ## Development
 Create a `.dev.vars` file (git-ignored) in the project root with:
 ```
