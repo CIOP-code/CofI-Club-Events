@@ -90,16 +90,14 @@ individual events easier to find, share, and get onto someone's own calendar.
   API endpoint to summarize it. Open question before building: stat tiles (simple totals, maybe
   with a "last 30 days" breakdown) vs real trend charts — the latter needs a charting library
   added and SRI-pinned the same way jsPDF was.
-- **Feedback / bug report tool.** A public button/modal that stores free-text feedback (plus an
-  optional reply-to email) in a new table, and emails the admin when one comes in. The email
-  address to notify would be a new admin-panel setting (a column on the single-row `admin` table).
-  The real open question is *how* to send the email from a Cloudflare Pages Function — there's no
-  built-in mail sending, so it's either Cloudflare's own Email Routing "send email" binding (no
-  third-party account needed, but the admin's destination address has to be verified once in the
-  Cloudflare dashboard) or a third-party transactional email API (Resend/SendGrid/etc., which
-  means the user creating an account there and setting the API key as a Cloudflare secret
-  themselves — same reasoning as this app never asking for `ADMIN_PASSWORD` in chat applies to any
-  new API key too). Needs that choice made before implementation starts.
+- ~~**Feedback / bug report tool.**~~ *(shipped)* A floating "Feedback" button on every page opens
+  a modal (bug/suggestion/other + message + optional reply-to email), stored in a new `feedback`
+  table with no login required to submit. Reviewed under Admin → Roadmap → Suggestions & Feedback
+  (deleting an item is the "handled" action — no separate status field). Sends an email via Resend
+  (a plain `fetch()` call, no SDK, matching this app's no-server-side-npm-dependencies rule) to the
+  address set in Admin → Utilities → Notifications, if one is configured; if `RESEND_API_KEY` isn't
+  set or the send fails, feedback is still stored and the submitter still sees success — email is a
+  best-effort notification, never a dependency for the feature to work.
 
 ## Shipped
 

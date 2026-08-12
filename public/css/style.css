@@ -1044,3 +1044,31 @@ body {
   /* Hide calendar title only on small phones */
   #cal-title { display: none !important; }
 }
+
+/* ---- Feedback button (floating, every page) ---- */
+.feedback-fab {
+  position: fixed;
+  right: 20px;
+  bottom: 24px;
+  z-index: 400; /* above page content and #bottom-nav (200), below modals (Bootstrap's ~1050) */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  border: none;
+  background: var(--coi-blue);
+  color: var(--color-surface);
+  font-weight: 600;
+  font-size: .85rem;
+  box-shadow: 0 4px 14px rgba(0,0,0,.2);
+  cursor: pointer;
+  transition: filter .15s, transform .15s;
+}
+.feedback-fab:hover { filter: brightness(1.12); transform: translateY(-1px); }
+.feedback-fab i { font-size: 1.05rem; }
+
+@media (max-width: 991px) {
+  /* Clear #bottom-nav so the FAB doesn't sit on top of it */
+  .feedback-fab { bottom: 76px; }
+}

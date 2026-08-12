@@ -599,11 +599,36 @@
                       </a>
                     </div>
                   </div>
+
+                  <!-- Notifications -->
+                  <div class="col-12 col-md-6">
+                    <div class="section-card">
+                      <h4><i class="fa-solid fa-bell me-2"></i>Notifications</h4>
+                      <p class="text-muted small">Where feedback/bug reports submitted via the public Feedback button get emailed. Leave blank to disable email notifications — submissions are always saved either way, visible under Roadmap.</p>
+                      <form id="admin-settings-form">
+                        <div class="mb-2">
+                          <label class="form-label" for="admin-notify-email">Notify Email</label>
+                          <input type="email" class="form-control" id="admin-notify-email" placeholder="admin@collegeofidaho.edu" />
+                        </div>
+                        <div id="admin-settings-msg" class="alert-inline d-none mb-2"></div>
+                        <button type="submit" class="btn-coi-secondary mt-1">
+                          <i class="fa-solid fa-floppy-disk me-1"></i>Save
+                        </button>
+                      </form>
+                    </div>
+                  </div>
                 </div>
               </div><!-- /admin-section-utilities -->
 
               <div id="admin-section-roadmap" class="admin-section d-none px-2">
-                <!-- Populated by renderAdminRoadmap() in app.js -->
+                <div class="section-card mb-3">
+                  <h4><i class="fa-solid fa-comment-dots me-2"></i>Suggestions &amp; Feedback</h4>
+                  <p class="text-muted small">Submitted via the public Feedback button on every page. Delete an item once you've reviewed or acted on it.</p>
+                  <div id="admin-feedback-list">Loading…</div>
+                </div>
+                <div id="admin-roadmap-phases">
+                  <!-- Populated by renderAdminRoadmap() in app.js -->
+                </div>
               </div>
             </div>
 
@@ -662,6 +687,14 @@
   </div>
 
 </div><!-- /app -->
+
+<!-- ================================================================
+     FEEDBACK BUTTON (floating, every page — not tied to calendar/admin state)
+     ================================================================ -->
+<button type="button" id="btn-feedback" class="feedback-fab" title="Send feedback or report a bug">
+  <i class="fa-solid fa-comment-dots"></i>
+  <span class="d-none d-sm-inline">Feedback</span>
+</button>
 
 <!-- ================================================================
      BOTTOM NAV (mobile / tablet)
@@ -815,6 +848,46 @@
               Clear Filters
             </button>
           </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Feedback / Bug Report Modal (public — no login required) -->
+<div class="modal fade" id="feedbackModal" tabindex="-1" aria-labelledby="feedbackModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold" id="feedbackModalLabel">
+          <i class="fa-solid fa-comment-dots me-2"></i>Feedback &amp; Bug Reports
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small">Found a bug, or have a suggestion? It goes straight to the College of Idaho admin.</p>
+        <form id="feedback-form">
+          <div class="mb-2">
+            <label class="form-label" for="feedback-category">Type</label>
+            <select class="form-select" id="feedback-category">
+              <option value="suggestion" selected>Suggestion</option>
+              <option value="bug">Bug report</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label" for="feedback-message">Message *</label>
+            <textarea class="form-control" id="feedback-message" rows="4" maxlength="4000" required
+                      placeholder="What happened, or what would you like to see?"></textarea>
+          </div>
+          <div class="mb-2">
+            <label class="form-label" for="feedback-email">Your email (optional)</label>
+            <input type="email" class="form-control" id="feedback-email" placeholder="Only if you'd like a reply" />
+          </div>
+          <div id="feedback-msg" class="alert-inline d-none mb-2"></div>
+          <button type="submit" class="btn-coi-secondary mt-1">
+            <i class="fa-solid fa-paper-plane me-1"></i>Send
+          </button>
         </form>
       </div>
     </div>

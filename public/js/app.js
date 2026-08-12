@@ -2078,7 +2078,8 @@ document.querySelectorAll('#admin-subnav [data-admin-section]').forEach(btn => {
     btn.classList.add('active');
     document.querySelectorAll('.admin-section').forEach(sec => sec.classList.add('d-none'));
     document.getElementById(`admin-section-${btn.dataset.adminSection}`).classList.remove('d-none');
-    if (btn.dataset.adminSection === 'roadmap') renderAdminRoadmap();
+    if (btn.dataset.adminSection === 'roadmap') { renderAdminRoadmap(); loadAdminFeedback(); }
+    if (btn.dataset.adminSection === 'utilities') loadAdminSettings();
   });
 });
 
@@ -2179,8 +2180,8 @@ const ROADMAP_PHASES = [
         desc: 'Entities currently share one password per organization, which suits how they’re used today. Would need named per-person logins if tracking who specifically posted each event ever becomes important — a bigger change.' },
       { title: 'Usage analytics dashboard', status: 'planned',
         desc: 'Turn the admin Dashboard tab into an actual dashboard: event count, entities that have posted at least one event, PDF export count, and app views by device (mobile vs desktop). Needs a new aggregate-only events-log table (no IP/identifying data) plus a beacon call and a summary API endpoint. Open question: simple stat tiles vs real trend charts (the latter needs an SRI-pinned charting library, same treatment as jsPDF).' },
-      { title: 'Feedback / bug report tool', status: 'planned',
-        desc: 'A public feedback/bug-report button storing submissions in a new table and emailing the admin (address configurable in the admin panel, stored on the admin row). Blocked on choosing how to send email from a Pages Function: Cloudflare’s own Email Routing send binding (no third-party account, but the destination address needs one-time verification) vs a third-party transactional email API (needs the user to create an account and set the API key as a Cloudflare secret themselves).' },
+      { title: 'Feedback / bug report tool', status: 'shipped',
+        desc: 'A floating Feedback button on every page opens a modal (bug/suggestion/other + message + optional reply-to email) — no login required. Reviewed under Admin → Roadmap → Suggestions & Feedback; deleting an item is the "handled" action. Emails the address set in Admin → Utilities → Notifications via Resend, if one is configured — a missing API key or failed send never blocks the submission, it just skips the email.' },
     ],
   },
 ];
@@ -2192,7 +2193,7 @@ const ROADMAP_STATUS_BADGE = {
 };
 
 function renderAdminRoadmap() {
-  const el = document.getElementById('admin-section-roadmap');
+  const el = document.getElementById('admin-roadmap-phases');
   if (!el || el.dataset.rendered) return;
   el.dataset.rendered = '1';
 
@@ -2223,6 +2224,103 @@ function renderAdminRoadmap() {
     `).join('')}
   `;
 }
+
+const FEEDBACK_CATEGORY_LABELS = { bug: 'Bug', suggestion: 'Suggestion', other: 'Other' };
+const FEEDBACK_CATEGORY_BADGE = {
+  bug: '<span class="badge bg-danger">Bug</span>',
+  suggestion: '<span class="badge bg-primary">Suggestion</span>',
+  other: '<span class="badge bg-secondary">Other</span>',
+};
+
+async function loadAdminFeedback() {
+  const el = document.getElementById('admin-feedback-list');
+  const { ok, data } = await apiFetch('/api/feedback');
+  const items = ok ? (data.feedback || []) : [];
+
+  if (!items.length) {
+    el.innerHTML = '<p class="text-muted small mb-0">No feedback submitted yet.</p>';
+    return;
+  }
+
+  el.innerHTML = items.map(f => `
+    <div class="event-list-item align-items-start" data-feedback-id="${f.id}">
+      <div class="ev-info">
+        <div class="ev-title-txt">
+          ${FEEDBACK_CATEGORY_BADGE[f.category] || escHtml(f.category)}
+          <span class="ms-1">${escHtml(f.message)}</span>
+        </div>
+        <div class="ev-meta-txt">
+          ${new Date(f.created_at).toLocaleString()}
+          ${f.contact_email ? ` · <a href="mailto:${escHtml(f.contact_email)}">${escHtml(f.contact_email)}</a>` : ''}
+        </div>
+      </div>
+      <button class="btn btn-sm btn-outline-danger" data-delete-feedback="${f.id}" title="Delete (mark handled)">
+        <i class="fa-solid fa-trash"></i>
+      </button>
+    </div>`).join('');
+
+  el.querySelectorAll('[data-delete-feedback]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const { ok } = await apiFetch(`/api/feedback/${btn.dataset.deleteFeedback}`, { method: 'DELETE' });
+      if (ok) loadAdminFeedback();
+    });
+  });
+}
+
+async function loadAdminSettings() {
+  const { ok, data } = await apiFetch('/api/admin/settings');
+  document.getElementById('admin-notify-email').value = ok ? (data.notify_email || '') : '';
+}
+
+document.getElementById('admin-settings-form').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideAlert('admin-settings-msg');
+  const btn = this.querySelector('button[type=submit]');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span>';
+
+  const { ok, data } = await apiFetch('/api/admin/settings', {
+    method: 'PUT',
+    body: JSON.stringify({ notify_email: document.getElementById('admin-notify-email').value.trim() }),
+  });
+
+  btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk me-1"></i>Save';
+
+  if (!ok) { showAlert('admin-settings-msg', data.error || 'Failed to save settings'); return; }
+  showAlert('admin-settings-msg', 'Saved!', 'success');
+});
+
+/* =============================================================
+   FEEDBACK / BUG REPORTS (public — every page, no login required)
+   ============================================================= */
+document.getElementById('btn-feedback').addEventListener('click', () => {
+  hideAlert('feedback-msg');
+  document.getElementById('feedback-form').reset();
+  new bootstrap.Modal(document.getElementById('feedbackModal')).show();
+});
+
+document.getElementById('feedback-form').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideAlert('feedback-msg');
+  const btn = this.querySelector('button[type=submit]');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span> Sending…';
+
+  const { ok, data } = await apiFetch('/api/feedback', {
+    method: 'POST',
+    body: JSON.stringify({
+      category: document.getElementById('feedback-category').value,
+      message: document.getElementById('feedback-message').value.trim(),
+      contact_email: document.getElementById('feedback-email').value.trim(),
+    }),
+  });
+
+  btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane me-1"></i>Send';
+
+  if (!ok) { showAlert('feedback-msg', data.error || 'Failed to send feedback'); return; }
+
+  showAlert('feedback-msg', 'Thanks! Your feedback was sent.', 'success');
+  this.reset();
+  setTimeout(() => bootstrap.Modal.getInstance(document.getElementById('feedbackModal'))?.hide(), 1200);
+});
 
 /* =============================================================
    EVENT SEARCH

@@ -38,7 +38,20 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE TABLE IF NOT EXISTS admin (
   id            INTEGER PRIMARY KEY CHECK (id = 1),
   password_hash TEXT NOT NULL,
-  salt          TEXT NOT NULL
+  salt          TEXT NOT NULL,
+  notify_email  TEXT
+);
+
+-- Feedback / bug reports submitted by anyone (public, no login required), reviewed by the admin
+-- under Admin -> Roadmap -> Suggestions & Feedback. Deleting a row IS the "handled" action --
+-- no separate status column, consistent with how the rest of this app has no soft-delete/archive
+-- state anywhere else.
+CREATE TABLE IF NOT EXISTS feedback (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  category      TEXT    NOT NULL DEFAULT 'suggestion' CHECK (category IN ('bug', 'suggestion', 'other')),
+  message       TEXT    NOT NULL,
+  contact_email TEXT,
+  created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Failed login attempts, for rate limiting /api/auth/admin and /api/auth/entity (see
@@ -94,3 +107,15 @@ CREATE INDEX IF NOT EXISTS idx_login_attempts_lookup ON login_attempts(ip, endpo
 -- added column as long as it doesn't reference other columns, no table rebuild needed. Existing
 -- rows get the DEFAULT ('other') applied automatically.
 --   ALTER TABLE events ADD COLUMN event_type TEXT NOT NULL DEFAULT 'other' CHECK (event_type IN ('meeting', 'social', 'academic', 'athletic', 'fundraiser', 'performance', 'other'));
+
+-- Migration to add the feedback tool to an already-migrated database: a nullable notify_email
+-- column on the single-row admin table (plain ADD COLUMN, no CHECK, no rebuild needed), plus the
+-- new feedback table itself.
+--   ALTER TABLE admin ADD COLUMN notify_email TEXT;
+--   CREATE TABLE IF NOT EXISTS feedback (
+--     id            INTEGER PRIMARY KEY AUTOINCREMENT,
+--     category      TEXT    NOT NULL DEFAULT 'suggestion' CHECK (category IN ('bug', 'suggestion', 'other')),
+--     message       TEXT    NOT NULL,
+--     contact_email TEXT,
+--     created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+--   );

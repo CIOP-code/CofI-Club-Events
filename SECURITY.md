@@ -56,10 +56,15 @@ frontend hiding a button is not treated as access control):
 | Edit/delete an event | Admin, or the entity that owns it |
 | Create a location | Any logged-in entity or admin |
 | View events/entities | Public, no login required |
+| Submit feedback/a bug report | Public, no login required |
+| View/delete feedback, set the notify email | Admin only |
 
 See the `onRequestPost`/`onRequestPut`/`onRequestDelete` handlers in `functions/api/entities.js`,
-`functions/api/entities/[id].js`, `functions/api/events.js`, and `functions/api/events/[id].js` for
-the exact checks.
+`functions/api/entities/[id].js`, `functions/api/events.js`, `functions/api/events/[id].js`,
+`functions/api/feedback.js`, `functions/api/feedback/[id].js`, and `functions/api/admin/settings.js`
+for the exact checks. The feedback submission endpoint is deliberately public and unauthenticated —
+same trust level as browsing the calendar — since requiring a login would defeat the point of a
+low-friction bug-report/suggestion box.
 
 ## Rate limiting
 
@@ -72,6 +77,12 @@ Rules** for `/api/auth/*`, since that rejects abusive traffic before it reaches 
 and isn't dependent on D1 being reachable. If the `login_attempts` table isn't present (e.g. this
 migration hasn't been applied to an older deployment yet), rate limiting fails *open* — logins
 still work, just without the backstop — rather than breaking login entirely.
+
+The same mechanism (same table, same 8-per-15-minutes window) also throttles `POST /api/feedback`
+— counting every accepted submission rather than only failures, since that's the only public,
+unauthenticated *write* endpoint in the app and the one most worth protecting from a scripted
+flood: unlike a login attempt, a feedback spam campaign also burns through the Resend
+send-notification quota (see "Third-party dependencies" below), not just database rows.
 
 ## Injection & XSS
 
@@ -106,7 +117,14 @@ Set globally via `public/_headers` (applies to both static pages and `/api/*` Fu
 ## Third-party dependencies / supply chain
 
 - **No server-side npm dependencies** — the backend is plain JS using only Web Crypto (built into
-  the Workers runtime) and D1's own driver. `wrangler` is a dev-only tool, never shipped.
+  the Workers runtime) and D1's own driver. `wrangler` is a dev-only tool, never shipped. The one
+  external service call (Resend, for feedback-notification email — `functions/utils/email.js`) is a
+  plain `fetch()` to their REST API, not their SDK, so this still holds. `RESEND_API_KEY` is a
+  Cloudflare secret, same as `JWT_SECRET`/`ADMIN_PASSWORD`; a submitted feedback message, its
+  category, and an optional reply-to email are the only data that ever leaves this app for it —
+  never anything from `entities`/`events`. A missing key or a failed Resend call is caught and
+  logged, not surfaced to whoever submitted the feedback — the submission itself always succeeds
+  independent of whether the notification email does.
 - **Frontend CDN assets are pinned with Subresource Integrity** (`integrity="sha384-..."` on every
   `<link>`/`<script>` tag pulling from a CDN in `public/index.html` and `public/404.html`: Bootstrap,
   Font Awesome, and jsPDF + its autotable plugin for the events PDF export feature).
