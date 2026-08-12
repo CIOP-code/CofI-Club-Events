@@ -2590,6 +2590,35 @@ document.getElementById('cal-filter-clear').addEventListener('click', () => {
   if (state.currentPage === 'home') renderCalendar();
 });
 
+// Builds the subscribable feed URL from whatever's currently selected in the filter form --
+// doesn't require hitting Apply first, so picking filters and grabbing a link works as its own
+// standalone action.
+document.getElementById('btn-copy-feed-link').addEventListener('click', async () => {
+  hideAlert('cal-feed-msg');
+  const params = new URLSearchParams();
+  const eventType = document.getElementById('cal-filter-type').value;
+  const entityId = document.getElementById('cal-filter-entity').value;
+  const locationId = document.getElementById('cal-filter-location').value;
+  if (eventType) params.set('event_type', eventType);
+  if (entityId) params.set('entity_id', entityId);
+  if (locationId) params.set('location_id', locationId);
+  const qs = params.toString();
+  const url = `${location.origin}/api/feed.ics${qs ? '?' + qs : ''}`;
+
+  try {
+    await navigator.clipboard.writeText(url);
+  } catch (e) {
+    const tmp = document.createElement('input');
+    tmp.value = url;
+    document.body.appendChild(tmp);
+    tmp.select();
+    document.execCommand('copy');
+    document.body.removeChild(tmp);
+  }
+  showAlert('cal-feed-msg', 'Subscribe link copied to clipboard', 'success');
+  setTimeout(() => hideAlert('cal-feed-msg'), 2000);
+});
+
 /* =============================================================
    INIT
    ============================================================= */
