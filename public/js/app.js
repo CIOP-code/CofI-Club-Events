@@ -89,6 +89,19 @@ function addDays(d, n) {
   return r;
 }
 
+function addMonths(d, n) {
+  // Pin to the 1st before shifting months, then clamp back to the target month's real last day --
+  // otherwise e.g. May 31 minus one month overflows (no "April 31") into May 1st via JS Date's
+  // own rollover, silently landing back in the wrong month instead of late April.
+  const r = new Date(d);
+  const day = r.getDate();
+  r.setDate(1);
+  r.setMonth(r.getMonth() + n);
+  const lastDayOfTargetMonth = new Date(r.getFullYear(), r.getMonth() + 1, 0).getDate();
+  r.setDate(Math.min(day, lastDayOfTargetMonth));
+  return r;
+}
+
 function getWeekStart(d) {
   const r = new Date(d);
   r.setDate(r.getDate() - r.getDay()); // Sunday
@@ -2200,11 +2213,14 @@ function renderAdminRoadmap() {
 /* =============================================================
    EVENT SEARCH
    ============================================================= */
+// Searches from a month ago through all upcoming events (no upper bound) -- not just "upcoming",
+// so a search still finds something recently past (e.g. an event from last week someone's
+// looking to reference), without unbounded-past results piling up for a common search term.
 document.getElementById('btn-event-search').addEventListener('click', () => {
   const input = document.getElementById('event-search-input');
   input.value = '';
   document.getElementById('event-search-results').innerHTML =
-    '<p class="text-muted small">Start typing to search upcoming events.</p>';
+    '<p class="text-muted small">Start typing to search events from the past month onward.</p>';
   new bootstrap.Modal(document.getElementById('eventSearchModal')).show();
   setTimeout(() => input.focus(), 200);
 });
@@ -2212,15 +2228,16 @@ document.getElementById('btn-event-search').addEventListener('click', () => {
 async function runEventSearch(q) {
   const resultsEl = document.getElementById('event-search-results');
   if (!q.trim()) {
-    resultsEl.innerHTML = '<p class="text-muted small">Start typing to search upcoming events.</p>';
+    resultsEl.innerHTML = '<p class="text-muted small">Start typing to search events from the past month onward.</p>';
     return;
   }
 
-  const { ok, data } = await apiFetch(`/api/events?start=${isoLocal(new Date())}&q=${encodeURIComponent(q.trim())}`);
+  const searchStart = isoLocal(addMonths(new Date(), -1));
+  const { ok, data } = await apiFetch(`/api/events?start=${searchStart}&q=${encodeURIComponent(q.trim())}`);
   const results = ok ? (data.events || []) : [];
 
   if (!results.length) {
-    resultsEl.innerHTML = '<p class="text-muted small">No upcoming events match your search.</p>';
+    resultsEl.innerHTML = '<p class="text-muted small">No events from the past month or upcoming match your search.</p>';
     return;
   }
 
