@@ -291,21 +291,29 @@ body {
   color: var(--color-secondary);
   transition: background .15s;
 }
-.filter-active-dot {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--coi-gold);
-  border: 1px solid var(--color-surface);
-}
 .cal-nav-btn:hover { background: var(--coi-light); }
 .cal-nav-btn.active {
   background: var(--coi-blue);
   color: var(--color-surface);
   border-color: var(--coi-blue);
+}
+/* Filter button: the .active fill above already flags "on" clearly, same as Week/Day/Month --
+   the badge adds *how many* filters, so it reads as more than a vague presence indicator. */
+.filter-badge {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--coi-gold);
+  color: var(--coi-blue);
+  font-size: .68rem;
+  font-weight: 700;
+  line-height: 17px;
+  text-align: center;
+  border: 1px solid var(--color-surface);
 }
 .view-toggle { display: flex; gap: 4px; }
 

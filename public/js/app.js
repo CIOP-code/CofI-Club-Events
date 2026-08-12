@@ -20,6 +20,7 @@ const state = {
   adminEventsAnchorDate: new Date(),  // reference date for that range, so past events are reachable too
   entitiesView: 'list',               // 'grid' | 'list' — icon tiles vs. compact rows on the Entities page
   calFilters: { event_type: '', entity_id: '', location_id: '' }, // calendar view filters
+  calFilterTimeoutId: null,   // handle for the auto-clear timer armed while a filter is active
 };
 
 /* Ensure CSS variable for calendar header height matches the rendered size.
@@ -37,6 +38,15 @@ window.addEventListener('resize', debounce(() => setTimeout(syncCalendarHeaderHe
    NAVIGATION
    ============================================================= */
 function navigate(page) {
+  // Leaving the calendar behind is the easiest way to forget a filter is on -- come back later
+  // and events are missing for no visible reason. Clearing it here means the calendar always
+  // starts unfiltered on a fresh visit, same as if you'd never touched it.
+  if (state.currentPage === 'home' && page !== 'home' && calFiltersActive()) {
+    state.calFilters = { event_type: '', entity_id: '', location_id: '' };
+    disarmCalFilterTimeout();
+    updateCalFilterIndicator();
+  }
+
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById(`page-${page}`).classList.add('active');
 
@@ -358,9 +368,13 @@ async function fetchEvents(startISO, endISO) {
   return ok ? data.events || [] : [];
 }
 
-function calFiltersActive() {
+function activeCalFilterCount() {
   const { event_type, entity_id, location_id } = state.calFilters;
-  return Boolean(event_type || entity_id || location_id);
+  return [event_type, entity_id, location_id].filter(Boolean).length;
+}
+
+function calFiltersActive() {
+  return activeCalFilterCount() > 0;
 }
 
 function isoLocal(d) {
@@ -2269,8 +2283,34 @@ document.getElementById('event-search-input').addEventListener('input', debounce
 /* =============================================================
    CALENDAR FILTERS (event type / entity / location)
    ============================================================= */
-function updateCalFilterDot() {
-  document.getElementById('cal-filter-dot').classList.toggle('d-none', !calFiltersActive());
+// A left-on filter silently hides events, which reads as "where did everything go" to whoever
+// hits this next -- rather than trusting people to remember to clear it, it clears itself after
+// a while unattended, and immediately on leaving the calendar page (the "switch screens" case is
+// the more common way to forget, so it isn't just a fallback for the timer).
+const CAL_FILTER_TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes
+
+function updateCalFilterIndicator() {
+  const btn = document.getElementById('btn-cal-filter');
+  const badge = document.getElementById('cal-filter-badge');
+  const count = activeCalFilterCount();
+  btn.classList.toggle('active', count > 0);
+  badge.classList.toggle('d-none', count === 0);
+  badge.textContent = String(count);
+  btn.title = count > 0 ? `Filter events (${count} active)` : 'Filter events';
+}
+
+function armCalFilterTimeout() {
+  clearTimeout(state.calFilterTimeoutId);
+  state.calFilterTimeoutId = setTimeout(() => {
+    state.calFilters = { event_type: '', entity_id: '', location_id: '' };
+    updateCalFilterIndicator();
+    if (state.currentPage === 'home') renderCalendar();
+  }, CAL_FILTER_TIMEOUT_MS);
+}
+
+function disarmCalFilterTimeout() {
+  clearTimeout(state.calFilterTimeoutId);
+  state.calFilterTimeoutId = null;
 }
 
 async function populateCalFilterOptions() {
@@ -2316,7 +2356,8 @@ document.getElementById('cal-filter-form').addEventListener('submit', function (
     entity_id:   document.getElementById('cal-filter-entity').value,
     location_id: document.getElementById('cal-filter-location').value,
   };
-  updateCalFilterDot();
+  updateCalFilterIndicator();
+  if (calFiltersActive()) armCalFilterTimeout(); else disarmCalFilterTimeout();
   bootstrap.Modal.getInstance(document.getElementById('calFilterModal'))?.hide();
   if (state.currentPage === 'home') renderCalendar();
 });
@@ -2324,7 +2365,8 @@ document.getElementById('cal-filter-form').addEventListener('submit', function (
 document.getElementById('cal-filter-clear').addEventListener('click', () => {
   state.calFilters = { event_type: '', entity_id: '', location_id: '' };
   document.getElementById('cal-filter-form').reset();
-  updateCalFilterDot();
+  updateCalFilterIndicator();
+  disarmCalFilterTimeout();
   bootstrap.Modal.getInstance(document.getElementById('calFilterModal'))?.hide();
   if (state.currentPage === 'home') renderCalendar();
 });
