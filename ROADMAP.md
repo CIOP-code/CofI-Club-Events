@@ -39,36 +39,37 @@ individual events easier to find, share, and get onto someone's own calendar.
   for keyboard/screen-reader users — standard accessibility practice, and something LiveWhale
   Calendar includes.
 
-## Phase 3 — Calendar Navigation & Filtering
+## Phase 3 — Calendar Navigation & Filtering *(shipped)*
 
-- **Mini-calendar heat map.** A small month-at-a-glance widget shading days by how many events
-  they have, for quickly spotting busy days.
-- **Jump-to-Day.** A date picker that jumps the week/day view straight to a chosen date instead of
-  paging one day/week at a time.
+- ~~**Mini-calendar heat map**~~ / ~~**Jump-to-Day.**~~ *(shipped, combined)* One "Jump to a Date"
+  toolbar button opens a compact month-grid modal, days shaded by event density relative to the
+  busiest day in view; clicking a day jumps the main calendar there in Day view. Shipped as a
+  single widget rather than two, since a heat-shaded date picker is the natural combination.
 - ~~**Tags / categories.**~~ *(shipped, in a simpler form)* Events now have a single `event_type`
   (Meeting/Social/Academic/Athletic/Fundraiser/Performance/Other), filterable via the API and used
   in the PDF export (available to everyone, not just admins). Full free-form/multi-tag support (an event tagged with several
   categories at once) is still a possible future upgrade if the fixed list ever proves too narrow.
 - ~~**Calendar filtering.**~~ *(shipped)* A filter button on the calendar toolbar narrows the
-  visible events by type, entity, and location (`GET /api/events` gained a matching `location_id`
-  param alongside the existing `entity_id`/`event_type` ones). Applies across week/day/month views
-  and persists through navigation; clears itself on leaving the calendar page or after 20 minutes
-  idle, and the toolbar button shows a count badge when active, so a left-on filter doesn't quietly
-  make events look "missing."
-- **Subscribable filtered feed (RSS/iCal).** A live-updating feed URL reflecting the same filters
-  as the Entities page (e.g. "just Chess Club"), so a calendar app stays in sync automatically
-  instead of a one-time `.ics` download. Now more natural to build than when this was first
-  written: the calendar filter's `entity_id`/`event_type`/`location_id` query params already exist
-  server-side, so a feed endpoint could reuse them directly instead of designing filtering from
-  scratch.
+  visible events by type, entity, location, and (once virtual/hybrid events shipped) format.
+  Applies across week/day/month views and persists through navigation; clears itself on leaving
+  the calendar page or after 20 minutes idle, and the toolbar button shows a count badge when
+  active, so a left-on filter doesn't quietly make events look "missing."
+- ~~**Subscribable filtered feed (RSS/iCal).**~~ *(shipped)* `GET /api/feed.ics` returns every
+  upcoming event matching the same entity/type/location/format filters as one live VCALENDAR;
+  the Filter modal's "Copy Subscribe Link" button builds the URL from whatever's currently
+  selected and copies it, ready to paste into Google/Apple/Outlook's "subscribe by URL."
 
-## Phase 4 — Richer Event Types
+## Phase 4 — Richer Event Types *(shipped)*
 
-- **Recurring events.** Weekly/monthly event series with an edit-this-vs-edit-series distinction.
-  The biggest schema/UX change on this list — needs a recurrence-rule column and
-  instance-expansion logic.
-- **Virtual / hybrid events.** An optional join-link field and a "Virtual"/"Hybrid" badge and
-  filter, for events not tied to a physical campus location.
+- ~~**Recurring events.**~~ *(shipped)* Weekly/monthly series (arbitrary interval, required end
+  date, capped at 52 occurrences) with a "this event only" vs "this and following events" choice
+  on both edit and delete. Materialized as real rows sharing a `series_id`, not expanded
+  on-the-fly, so every other feature (search, the feed, PDF export...) needed zero changes to
+  already work with recurring events.
+- ~~**Virtual / hybrid events.**~~ *(shipped)* An optional join-link field; "Virtual"/"Hybrid" is
+  derived from that link plus whether a location is also set, not its own stored field. Calendar
+  tiles show a small icon, the event detail modal gets a "Join Online" button, and the calendar
+  filter (and feed) gained a matching format option.
 
 ## Phase 5 — Media & Structured Data
 
