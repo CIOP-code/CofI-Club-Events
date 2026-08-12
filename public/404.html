@@ -201,6 +201,33 @@
                       <input type="datetime-local" class="form-control" id="ev-end" required />
                     </div>
                   </div>
+                  <div class="form-check mt-3">
+                    <input type="checkbox" class="form-check-input" id="ev-repeats" />
+                    <label class="form-check-label" for="ev-repeats">Repeats</label>
+                  </div>
+                  <div id="ev-repeat-options" class="d-none mt-2">
+                    <div class="row g-2">
+                      <div class="col-sm-6">
+                        <label class="form-label" for="ev-repeat-freq">Frequency</label>
+                        <select class="form-select" id="ev-repeat-freq">
+                          <option value="weekly">Weekly</option>
+                          <option value="monthly">Monthly</option>
+                        </select>
+                      </div>
+                      <div class="col-sm-6">
+                        <label class="form-label" for="ev-repeat-interval">Every</label>
+                        <div class="input-group">
+                          <input type="number" class="form-control" id="ev-repeat-interval" min="1" value="1" />
+                          <span class="input-group-text" id="ev-repeat-interval-unit">week(s)</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="mt-2">
+                      <label class="form-label" for="ev-repeat-until">Repeat Until *</label>
+                      <input type="date" class="form-control" id="ev-repeat-until" />
+                      <div class="form-text">Up to 52 events will be created.</div>
+                    </div>
+                  </div>
                   <div id="create-event-msg" class="alert-inline d-none"></div>
                   <button type="submit" class="btn-coi-primary mt-3">
                     <i class="fa-solid fa-plus me-1"></i>Create Event
@@ -359,6 +386,33 @@
                           <div class="col-6">
                             <label class="form-label" for="adm-ev-end">End *</label>
                             <input type="datetime-local" class="form-control" id="adm-ev-end" required />
+                          </div>
+                        </div>
+                        <div class="form-check mt-2">
+                          <input type="checkbox" class="form-check-input" id="adm-ev-repeats" />
+                          <label class="form-check-label" for="adm-ev-repeats">Repeats</label>
+                        </div>
+                        <div id="adm-ev-repeat-options" class="d-none mt-2">
+                          <div class="row g-2">
+                            <div class="col-6">
+                              <label class="form-label" for="adm-ev-repeat-freq">Frequency</label>
+                              <select class="form-select" id="adm-ev-repeat-freq">
+                                <option value="weekly">Weekly</option>
+                                <option value="monthly">Monthly</option>
+                              </select>
+                            </div>
+                            <div class="col-6">
+                              <label class="form-label" for="adm-ev-repeat-interval">Every</label>
+                              <div class="input-group">
+                                <input type="number" class="form-control" id="adm-ev-repeat-interval" min="1" value="1" />
+                                <span class="input-group-text" id="adm-ev-repeat-interval-unit">week(s)</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div class="mt-2">
+                            <label class="form-label" for="adm-ev-repeat-until">Repeat Until *</label>
+                            <input type="date" class="form-control" id="adm-ev-repeat-until" />
+                            <div class="form-text">Up to 52 events will be created.</div>
                           </div>
                         </div>
                         <div id="adm-create-event-msg" class="alert-inline d-none mb-2"></div>
@@ -1167,6 +1221,18 @@
       <div class="modal-body">
         <form id="edit-event-form">
           <input type="hidden" id="edit-ev-id" />
+          <input type="hidden" id="edit-ev-series-id" />
+          <div id="edit-ev-apply-to-box" class="mb-3 d-none">
+            <label class="form-label">This event repeats. Apply changes to:</label>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="edit-ev-apply-to" id="edit-ev-apply-this" value="this" checked />
+              <label class="form-check-label" for="edit-ev-apply-this">This event only</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="edit-ev-apply-to" id="edit-ev-apply-future" value="future" />
+              <label class="form-check-label" for="edit-ev-apply-future">This and following events</label>
+            </div>
+          </div>
           <div class="mb-2">
             <label class="form-label" for="edit-ev-title">Event Name *</label>
             <input type="text" class="form-control" id="edit-ev-title" required />
@@ -1212,6 +1278,29 @@
             <i class="fa-solid fa-check me-1"></i>Save Changes
           </button>
         </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE RECURRING EVENT MODAL (only shown when the event being deleted is part of a series) -->
+<div class="modal fade" id="deleteSeriesModal" tabindex="-1" aria-labelledby="deleteSeriesModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:380px">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold" id="deleteSeriesModalLabel">Delete Recurring Event</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small">This event is part of a recurring series.</p>
+        <div class="d-flex flex-column gap-2">
+          <button type="button" class="btn btn-outline-danger" id="btn-delete-this-only">
+            Delete This Event Only
+          </button>
+          <button type="button" class="btn btn-danger" id="btn-delete-this-and-future">
+            Delete This and Following Events
+          </button>
+        </div>
       </div>
     </div>
   </div>

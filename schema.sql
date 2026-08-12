@@ -25,20 +25,30 @@ CREATE TABLE IF NOT EXISTS locations (
 -- location_id set = Hybrid, no join_url = in-person (regardless of location_id), matching how
 -- event_type/format filters are computed in functions/api/events.js rather than needing their
 -- own stored column that could drift out of sync with location_id.
+--
+-- Recurring events are materialized, not virtual: creating one with a recurrence rule inserts
+-- one real row per occurrence (functions/utils/recurrence.js, capped at 52), all sharing the
+-- same series_id and an identical recurrence_rule (JSON: {freq, interval, until}). This keeps
+-- every existing query (calendar, feed, PDF export, search...) working unchanged -- a recurring
+-- event's instances are just ordinary rows to everything except the edit/delete "this vs. this
+-- and following" UI, which is the only code that needs to know series_id exists at all.
 CREATE TABLE IF NOT EXISTS events (
-  id             INTEGER PRIMARY KEY AUTOINCREMENT,
-  title          TEXT    NOT NULL,
-  description    TEXT,
-  location_id    INTEGER,
-  start_datetime TEXT    NOT NULL,
-  end_datetime   TEXT    NOT NULL,
-  entity_id      INTEGER NOT NULL,
-  event_type     TEXT    NOT NULL DEFAULT 'other' CHECK (event_type IN ('meeting', 'social', 'academic', 'athletic', 'fundraiser', 'performance', 'other')),
-  join_url       TEXT,
-  created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  title           TEXT    NOT NULL,
+  description     TEXT,
+  location_id     INTEGER,
+  start_datetime  TEXT    NOT NULL,
+  end_datetime    TEXT    NOT NULL,
+  entity_id       INTEGER NOT NULL,
+  event_type      TEXT    NOT NULL DEFAULT 'other' CHECK (event_type IN ('meeting', 'social', 'academic', 'athletic', 'fundraiser', 'performance', 'other')),
+  join_url        TEXT,
+  series_id       TEXT,
+  recurrence_rule TEXT,
+  created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (entity_id) REFERENCES entities(id) ON DELETE CASCADE,
   FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE SET NULL
 );
+CREATE INDEX IF NOT EXISTS idx_events_series ON events(series_id);
 
 -- Admin table (single row, id always 1) — the College of Idaho Admin account
 -- reset_token_hash/reset_token_expires back the self-service "Forgot password" flow: a SHA-256
@@ -140,3 +150,9 @@ CREATE INDEX IF NOT EXISTS idx_login_attempts_lookup ON login_attempts(ip, endpo
 -- COLUMN, no rebuild needed -- Virtual/Hybrid/in-person is derived from join_url + location_id
 -- at query time, not stored.
 --   ALTER TABLE events ADD COLUMN join_url TEXT;
+
+-- Migration to add recurring events to an already-migrated events table. Plain ADD COLUMN x2,
+-- no rebuild needed -- both are nullable and neither has a CHECK referencing other columns.
+--   ALTER TABLE events ADD COLUMN series_id TEXT;
+--   ALTER TABLE events ADD COLUMN recurrence_rule TEXT;
+--   CREATE INDEX IF NOT EXISTS idx_events_series ON events(series_id);

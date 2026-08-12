@@ -3,8 +3,11 @@
  *                                        (optional date range, text search, entity, type,
  *                                        location, and virtual/hybrid/in_person format filters)
  * POST /api/events                                          – create a new event (requires entity or admin auth)
+ *                                        optional body.recurrence: { freq, interval, until }
+ *                                        creates a whole series instead of one event
  */
 import { findLocationConflict, locationConflictMessage } from '../utils/scheduling.js';
+import { generateRecurrenceInstances, RECURRENCE_FREQS } from '../utils/recurrence.js';
 
 const EVENT_TYPES = ['meeting', 'social', 'academic', 'athletic', 'fundraiser', 'performance', 'other'];
 const EVENT_FORMATS = ['virtual', 'hybrid', 'in_person'];
@@ -135,6 +138,49 @@ export async function onRequestPost({ env, request, data }) {
   const entity_id = user.type === 'admin' ? (body.entity_id || 0) : user.entity_id;
   if (!entity_id) {
     return json({ error: 'entity_id is required' }, 400);
+  }
+
+  // A recurring series: validate the rule, materialize every occurrence up front, and verify
+  // NONE of them conflict before inserting ANY of them -- an all-or-nothing creation, same
+  // "hard reject on conflict" behavior a single event already has, just checked across every
+  // instance first instead of one.
+  if (body.recurrence) {
+    const { freq, interval, until } = body.recurrence;
+    if (!RECURRENCE_FREQS.includes(freq)) {
+      return json({ error: `recurrence.freq must be one of: ${RECURRENCE_FREQS.join(', ')}` }, 400);
+    }
+    if (!until) {
+      return json({ error: 'recurrence.until (an end date) is required' }, 400);
+    }
+
+    const instances = generateRecurrenceInstances(start_datetime, end_datetime, { freq, interval, until });
+    if (!instances.length) {
+      return json({ error: "recurrence.until must be on or after the event's start date" }, 400);
+    }
+
+    try {
+      for (const inst of instances) {
+        const conflict = await findLocationConflict(env, { location_id: location_id || null, start_datetime: inst.start_datetime, end_datetime: inst.end_datetime });
+        if (conflict) {
+          return json({ error: `${locationConflictMessage(conflict)} (on ${inst.start_datetime.slice(0, 10)})` }, 409);
+        }
+      }
+
+      const series_id = crypto.randomUUID();
+      const safeInterval = Math.max(1, parseInt(interval, 10) || 1);
+      const recurrence_rule = JSON.stringify({ freq, interval: safeInterval, until });
+
+      const stmts = instances.map(inst => env.DB.prepare(
+        `INSERT INTO events (title, description, location_id, start_datetime, end_datetime, entity_id, event_type, join_url, series_id, recurrence_rule)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(title, description || '', location_id || null, inst.start_datetime, inst.end_datetime, entity_id, event_type, join_url || null, series_id, recurrence_rule));
+
+      await env.DB.batch(stmts);
+      return json({ series_id, count: instances.length, message: `${instances.length} events created` }, 201);
+    } catch (err) {
+      console.error(err);
+      return json({ error: 'Internal server error' }, 500);
+    }
   }
 
   try {

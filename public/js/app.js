@@ -513,7 +513,7 @@ async function renderCalendar() {
           style="top:${topPx}px;height:${heightPx}px;left:calc(${leftPct}% + 2px);width:calc(${widthPct}% - 4px);background:${color};color:#fff"
           data-ev-id="${ev.id}"
           title="${escHtml(ev.title)} · ${escHtml(timeStr)}">
-        <div class="ev-title">${eventFormatIcon(ev)}${escHtml(ev.title)}</div>
+        <div class="ev-title">${eventRecurringIcon(ev)}${eventFormatIcon(ev)}${escHtml(ev.title)}</div>
         <div class="ev-location">${escHtml(ev.location_name || '')}</div>
         <div class="ev-entity">${escHtml(ev.entity_name || '')}</div>
         ${ev.description ? `<div class="ev-desc">${escHtml(truncateText(ev.description, 120))}</div>` : ''}
@@ -777,6 +777,11 @@ function eventFormatIcon(ev) {
   if (!ev.join_url) return '';
   const isHybrid = !!ev.location_id;
   return `<i class="fa-solid ${isHybrid ? 'fa-satellite-dish' : 'fa-video'} ev-format-icon" title="${isHybrid ? 'Hybrid' : 'Virtual'}"></i> `;
+}
+
+function eventRecurringIcon(ev) {
+  if (!ev.series_id) return '';
+  return `<i class="fa-solid fa-repeat ev-format-icon" title="Repeats"></i> `;
 }
 
 // Lists the events collapsed into an overflow tile; clicking one opens the normal event modal.
@@ -1232,6 +1237,47 @@ document.getElementById('change-pw-form').addEventListener('submit', async funct
   }, 1500);
 });
 
+// Wires the "Repeats" checkbox + frequency/interval/until fields shared by both create-event
+// forms (entity and admin) -- shows/hides the options block and keeps the "week(s)"/"month(s)"
+// unit label matching whatever frequency is selected. Returns a function that reads the current
+// form state into a `recurrence` object for the submit handler to include, or null if unchecked.
+function wireRepeatUi(prefix) {
+  const checkbox = document.getElementById(`${prefix}-repeats`);
+  const options = document.getElementById(`${prefix}-repeat-options`);
+  const freqSel = document.getElementById(`${prefix}-repeat-freq`);
+  const unitLabel = document.getElementById(`${prefix}-repeat-interval-unit`);
+  const intervalInput = document.getElementById(`${prefix}-repeat-interval`);
+  const untilInput = document.getElementById(`${prefix}-repeat-until`);
+
+  checkbox.addEventListener('change', () => {
+    options.classList.toggle('d-none', !checkbox.checked);
+  });
+  freqSel.addEventListener('change', () => {
+    unitLabel.textContent = freqSel.value === 'monthly' ? 'month(s)' : 'week(s)';
+  });
+
+  return function readRecurrence() {
+    if (!checkbox.checked) return null;
+    return {
+      freq: freqSel.value,
+      interval: parseInt(intervalInput.value, 10) || 1,
+      until: untilInput.value,
+    };
+  };
+}
+
+function resetRepeatUi(prefix) {
+  document.getElementById(`${prefix}-repeats`).checked = false;
+  document.getElementById(`${prefix}-repeat-options`).classList.add('d-none');
+  document.getElementById(`${prefix}-repeat-freq`).value = 'weekly';
+  document.getElementById(`${prefix}-repeat-interval`).value = '1';
+  document.getElementById(`${prefix}-repeat-interval-unit`).textContent = 'week(s)';
+  document.getElementById(`${prefix}-repeat-until`).value = '';
+}
+
+const getEvRecurrence = wireRepeatUi('ev');
+const getAdmEvRecurrence = wireRepeatUi('adm-ev');
+
 // Create event (entity user)
 document.getElementById('create-event-form').addEventListener('submit', async function (e) {
   e.preventDefault();
@@ -1272,6 +1318,16 @@ document.getElementById('create-event-form').addEventListener('submit', async fu
     return;
   }
 
+  const recurrence = getEvRecurrence();
+  if (recurrence) {
+    if (!recurrence.until) {
+      showAlert('create-event-msg', 'Pick a "Repeat Until" date');
+      btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-plus me-1"></i>Create Event';
+      return;
+    }
+    payload.recurrence = recurrence;
+  }
+
   const { ok, data } = await apiFetch('/api/events', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -1282,8 +1338,9 @@ document.getElementById('create-event-form').addEventListener('submit', async fu
 
   if (!ok) { showAlert('create-event-msg', data.error || 'Failed to create event'); return; }
 
-  showAlert('create-event-msg', 'Event created successfully!', 'success');
+  showAlert('create-event-msg', data.count ? `${data.count} events created!` : 'Event created successfully!', 'success');
   this.reset();
+  resetRepeatUi('ev');
 });
 
 /* =============================================================
@@ -1987,6 +2044,13 @@ document.getElementById('admin-create-event-form').addEventListener('submit', as
     return;
   }
 
+  const admRecurrence = getAdmEvRecurrence();
+  if (admRecurrence && !admRecurrence.until) {
+    showAlert('adm-create-event-msg', 'Pick a "Repeat Until" date');
+    btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-plus me-1"></i>Create Event';
+    return;
+  }
+
   const { ok, data } = await apiFetch('/api/events', {
     method: 'POST',
     body: JSON.stringify({
@@ -1998,14 +2062,16 @@ document.getElementById('admin-create-event-form').addEventListener('submit', as
       join_url:       document.getElementById('adm-ev-join-url').value.trim(),
       start_datetime: adm_start,
       end_datetime:   adm_end,
+      ...(admRecurrence ? { recurrence: admRecurrence } : {}),
     }),
   });
 
   btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-plus me-1"></i>Create Event';
 
   if (!ok) { showAlert('adm-create-event-msg', data.error || 'Failed to create event'); return; }
-  showAlert('adm-create-event-msg', 'Event created!', 'success');
+  showAlert('adm-create-event-msg', data.count ? `${data.count} events created!` : 'Event created!', 'success');
   this.reset();
+  resetRepeatUi('adm-ev');
   loadAdminEvents();
 });
 
@@ -2123,11 +2189,40 @@ function refreshEventLists() {
 // Delete event (shared by the admin Events list and an entity's own My Events list -- the API
 // already permits either an admin or the owning entity)
 async function deleteEventById(id) {
+  // Need to know if this is part of a series before deciding which confirmation to show, so
+  // this always fetches the event first rather than trusting a caller to have it on hand.
+  const { ok: getOk, data: getData } = await apiFetch(`/api/events/${id}`);
+  const ev = getOk ? getData.event : null;
+
+  if (ev?.series_id) {
+    const modalEl = document.getElementById('deleteSeriesModal');
+    modalEl.dataset.eventId = id;
+    new bootstrap.Modal(modalEl).show();
+    return;
+  }
+
   if (!confirm('Delete this event?')) return;
   const { ok, data } = await apiFetch(`/api/events/${id}`, { method: 'DELETE' });
   if (!ok) { alert(data.error || 'Failed to delete event'); return; }
   refreshEventLists();
 }
+
+document.getElementById('btn-delete-this-only').addEventListener('click', async () => {
+  const id = document.getElementById('deleteSeriesModal').dataset.eventId;
+  bootstrap.Modal.getInstance(document.getElementById('deleteSeriesModal'))?.hide();
+  const { ok, data } = await apiFetch(`/api/events/${id}`, { method: 'DELETE' });
+  if (!ok) { alert(data.error || 'Failed to delete event'); return; }
+  refreshEventLists();
+});
+
+document.getElementById('btn-delete-this-and-future').addEventListener('click', async () => {
+  const id = document.getElementById('deleteSeriesModal').dataset.eventId;
+  if (!confirm('Delete this and every following event in the series? This cannot be undone.')) return;
+  bootstrap.Modal.getInstance(document.getElementById('deleteSeriesModal'))?.hide();
+  const { ok, data } = await apiFetch(`/api/events/${id}?apply_to=future`, { method: 'DELETE' });
+  if (!ok) { alert(data.error || 'Failed to delete events'); return; }
+  refreshEventLists();
+});
 
 // Edit event (title / description / location / start / end – entity can't be changed)
 async function openEditEventModal(id) {
@@ -2137,6 +2232,9 @@ async function openEditEventModal(id) {
   const ev = data.event;
 
   document.getElementById('edit-ev-id').value = ev.id;
+  document.getElementById('edit-ev-series-id').value = ev.series_id || '';
+  document.getElementById('edit-ev-apply-to-box').classList.toggle('d-none', !ev.series_id);
+  document.getElementById('edit-ev-apply-this').checked = true;
   document.getElementById('edit-ev-title').value = ev.title;
   document.getElementById('edit-ev-desc').value = ev.description || '';
   document.getElementById('edit-ev-type').value = ev.event_type || 'other';
@@ -2186,6 +2284,11 @@ document.getElementById('edit-event-form').addEventListener('submit', async func
     return;
   }
 
+  const seriesId = document.getElementById('edit-ev-series-id').value;
+  const applyTo = seriesId
+    ? (document.querySelector('input[name="edit-ev-apply-to"]:checked')?.value || 'this')
+    : 'this';
+
   const { ok, data } = await apiFetch(`/api/events/${id}`, {
     method: 'PUT',
     body: JSON.stringify({
@@ -2196,6 +2299,7 @@ document.getElementById('edit-event-form').addEventListener('submit', async func
       join_url:       document.getElementById('edit-ev-join-url').value.trim(),
       start_datetime: edit_start,
       end_datetime:   edit_end,
+      apply_to:       applyTo,
     }),
   });
 
