@@ -1,7 +1,8 @@
 /**
- * GET /api/feed.ics?entity_id=&event_type=&location_id=  – a subscribable iCalendar feed of all
- * upcoming events matching the given filters (same params as the calendar's own Filter modal).
- * No filters = every upcoming event. Public, no auth -- same visibility as browsing the calendar.
+ * GET /api/feed.ics?entity_id=&event_type=&location_id=&format=  – a subscribable iCalendar feed
+ * of all upcoming events matching the given filters (same params as the calendar's own Filter
+ * modal, including the virtual/hybrid/in_person format filter). No filters = every upcoming
+ * event. Public, no auth -- same visibility as browsing the calendar.
  *
  * Unlike the single-event download (functions/api/events/[id]/ics.js), a calendar app re-fetches
  * this URL on its own schedule, so it stays in sync automatically instead of going stale the
@@ -9,11 +10,21 @@
  */
 import { buildVEventLines, foldLine, toIcsUtcNow } from '../utils/ics.js';
 
+// Same derivation as functions/api/events.js's format filter -- kept in sync by hand rather than
+// imported, matching this codebase's existing convention of duplicating small per-file constants
+// (e.g. EVENT_TYPES) instead of sharing them.
+const FORMAT_CONDITIONS = {
+  virtual:   `(e.join_url IS NOT NULL AND e.join_url != '' AND e.location_id IS NULL)`,
+  hybrid:    `(e.join_url IS NOT NULL AND e.join_url != '' AND e.location_id IS NOT NULL)`,
+  in_person: `(e.join_url IS NULL OR e.join_url = '')`,
+};
+
 export async function onRequestGet({ env, request }) {
   const url = new URL(request.url);
   const entityId = url.searchParams.get('entity_id');
   const eventType = url.searchParams.get('event_type');
   const locationId = url.searchParams.get('location_id');
+  const format = url.searchParams.get('format');
 
   let query = `
     SELECT e.*, en.name AS entity_name, l.name AS location_name
@@ -33,6 +44,7 @@ export async function onRequestGet({ env, request }) {
   if (entityId) { query += ' AND e.entity_id = ?'; params.push(entityId); }
   if (eventType) { query += ' AND e.event_type = ?'; params.push(eventType); }
   if (locationId) { query += ' AND e.location_id = ?'; params.push(locationId); }
+  if (format && FORMAT_CONDITIONS[format]) { query += ` AND ${FORMAT_CONDITIONS[format]}`; }
   query += ' ORDER BY e.start_datetime ASC';
 
   try {

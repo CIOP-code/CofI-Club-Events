@@ -90,6 +90,12 @@ export function foldLine(line) {
 export function buildVEventLines(event, hostname, dtStamp) {
   const dtStart = toIcsUtc(event.start_datetime);
   const dtEnd = toIcsUtc(event.end_datetime);
+  // LOCATION always gets something sensible even for a fully virtual event (no location_name at
+  // all) rather than being omitted; URL is the machine-actionable join link most calendar clients
+  // render as a clickable button, separate from the human-readable LOCATION text.
+  const locationText = event.location_name
+    ? (event.join_url ? `${event.location_name} (also virtual)` : event.location_name)
+    : (event.join_url ? 'Virtual' : null);
   return [
     'BEGIN:VEVENT',
     `UID:event-${event.id}@${hostname}`,
@@ -98,7 +104,8 @@ export function buildVEventLines(event, hostname, dtStamp) {
     `DTEND:${dtEnd}`,
     `SUMMARY:${icsEscape(event.title)}`,
     event.description ? `DESCRIPTION:${icsEscape(event.description)}` : null,
-    event.location_name ? `LOCATION:${icsEscape(event.location_name)}` : null,
+    locationText ? `LOCATION:${icsEscape(locationText)}` : null,
+    event.join_url ? `URL:${icsEscape(event.join_url)}` : null,
     `CATEGORIES:${icsEscape(event.entity_name)}`,
     'END:VEVENT',
   ].filter(Boolean);

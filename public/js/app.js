@@ -19,7 +19,7 @@ const state = {
   adminEventsView: 'week',            // 'week' | 'month' — browsable range for the admin Events list
   adminEventsAnchorDate: new Date(),  // reference date for that range, so past events are reachable too
   entitiesView: 'list',               // 'grid' | 'list' — icon tiles vs. compact rows on the Entities page
-  calFilters: { event_type: '', entity_id: '', location_id: '' }, // calendar view filters
+  calFilters: { event_type: '', entity_id: '', location_id: '', format: '' }, // calendar view filters
   calFilterTimeoutId: null,   // handle for the auto-clear timer armed while a filter is active
   jumpCalAnchor: new Date(),  // which month the Jump-to-Date mini-calendar is showing
 };
@@ -43,7 +43,7 @@ function navigate(page) {
   // and events are missing for no visible reason. Clearing it here means the calendar always
   // starts unfiltered on a fresh visit, same as if you'd never touched it.
   if (state.currentPage === 'home' && page !== 'home' && calFiltersActive()) {
-    state.calFilters = { event_type: '', entity_id: '', location_id: '' };
+    state.calFilters = { event_type: '', entity_id: '', location_id: '', format: '' };
     disarmCalFilterTimeout();
     updateCalFilterIndicator();
   }
@@ -361,17 +361,18 @@ const MONTHS = ['January','February','March','April','May','June',
 
 async function fetchEvents(startISO, endISO) {
   let url = `/api/events?start=${startISO}&end=${endISO}`;
-  const { event_type, entity_id, location_id } = state.calFilters;
+  const { event_type, entity_id, location_id, format } = state.calFilters;
   if (event_type) url += `&event_type=${encodeURIComponent(event_type)}`;
   if (entity_id) url += `&entity_id=${encodeURIComponent(entity_id)}`;
   if (location_id) url += `&location_id=${encodeURIComponent(location_id)}`;
+  if (format) url += `&format=${encodeURIComponent(format)}`;
   const { ok, data } = await apiFetch(url);
   return ok ? data.events || [] : [];
 }
 
 function activeCalFilterCount() {
-  const { event_type, entity_id, location_id } = state.calFilters;
-  return [event_type, entity_id, location_id].filter(Boolean).length;
+  const { event_type, entity_id, location_id, format } = state.calFilters;
+  return [event_type, entity_id, location_id, format].filter(Boolean).length;
 }
 
 function calFiltersActive() {
@@ -512,7 +513,7 @@ async function renderCalendar() {
           style="top:${topPx}px;height:${heightPx}px;left:calc(${leftPct}% + 2px);width:calc(${widthPct}% - 4px);background:${color};color:#fff"
           data-ev-id="${ev.id}"
           title="${escHtml(ev.title)} · ${escHtml(timeStr)}">
-        <div class="ev-title">${escHtml(ev.title)}</div>
+        <div class="ev-title">${eventFormatIcon(ev)}${escHtml(ev.title)}</div>
         <div class="ev-location">${escHtml(ev.location_name || '')}</div>
         <div class="ev-entity">${escHtml(ev.entity_name || '')}</div>
         ${ev.description ? `<div class="ev-desc">${escHtml(truncateText(ev.description, 120))}</div>` : ''}
@@ -769,6 +770,15 @@ function truncateText(str, max) {
   return s.length > max ? s.slice(0, max).trimEnd() + '…' : s;
 }
 
+// "Virtual"/"Hybrid" isn't a stored field -- derived the same way the backend's format filter
+// derives it (functions/api/events.js): a join_url with no location is Virtual, a join_url with
+// a location is Hybrid, no join_url is in-person and gets no icon at all.
+function eventFormatIcon(ev) {
+  if (!ev.join_url) return '';
+  const isHybrid = !!ev.location_id;
+  return `<i class="fa-solid ${isHybrid ? 'fa-satellite-dish' : 'fa-video'} ev-format-icon" title="${isHybrid ? 'Hybrid' : 'Virtual'}"></i> `;
+}
+
 // Lists the events collapsed into an overflow tile; clicking one opens the normal event modal.
 function openOverflowModal(hiddenEvents, allEvents) {
   if (!hiddenEvents || !hiddenEvents.length) return;
@@ -812,12 +822,18 @@ function renderEventModal(ev) {
   document.getElementById('eventModalLabel').textContent = ev.title;
   document.getElementById('event-modal-title').textContent = ev.title;
   document.getElementById('event-modal-entity-badge').textContent = ev.entity_name || '';
+  const formatSuffix = ev.location_name
+    ? ` · ${ev.location_name}${ev.join_url ? ' (Hybrid)' : ''}`
+    : (ev.join_url ? ' · Virtual' : '');
   document.getElementById('event-modal-time').textContent =
     `${fmt(start,{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})} – ${fmt(end,{hour:'numeric',minute:'2-digit'})}` +
-    (ev.location_name ? ` · ${ev.location_name}` : '');
+    formatSuffix;
   document.getElementById('event-modal-desc').textContent = ev.description || 'No description provided.';
   document.getElementById('event-modal-poster').classList.add('d-none');
   document.getElementById('event-modal-ics-link').href = `/api/events/${ev.id}/ics`;
+  const joinLink = document.getElementById('event-modal-join-link');
+  joinLink.classList.toggle('d-none', !ev.join_url);
+  if (ev.join_url) joinLink.href = ev.join_url;
   hideAlert('event-modal-copied-msg');
   modalEl.dataset.eventId = ev.id;
 }
@@ -1245,6 +1261,7 @@ document.getElementById('create-event-form').addEventListener('submit', async fu
     description:    document.getElementById('ev-desc').value.trim(),
     event_type:     document.getElementById('ev-type').value,
     location_id,
+    join_url:       document.getElementById('ev-join-url').value.trim(),
     start_datetime: document.getElementById('ev-start').value,
     end_datetime:   document.getElementById('ev-end').value,
   };
@@ -1978,6 +1995,7 @@ document.getElementById('admin-create-event-form').addEventListener('submit', as
       description:    document.getElementById('adm-ev-desc').value.trim(),
       event_type:     document.getElementById('adm-ev-type').value,
       location_id,
+      join_url:       document.getElementById('adm-ev-join-url').value.trim(),
       start_datetime: adm_start,
       end_datetime:   adm_end,
     }),
@@ -2125,6 +2143,7 @@ async function openEditEventModal(id) {
   document.getElementById('edit-ev-start').value = formatDateTimeLocal(new Date(ev.start_datetime));
   document.getElementById('edit-ev-end').value = formatDateTimeLocal(new Date(ev.end_datetime));
   document.getElementById('edit-ev-new-location').value = '';
+  document.getElementById('edit-ev-join-url').value = ev.join_url || '';
 
   const locations = await fetchLocations();
   const locSel = document.getElementById('edit-ev-location');
@@ -2174,6 +2193,7 @@ document.getElementById('edit-event-form').addEventListener('submit', async func
       description:    document.getElementById('edit-ev-desc').value.trim(),
       event_type:     document.getElementById('edit-ev-type').value,
       location_id,
+      join_url:       document.getElementById('edit-ev-join-url').value.trim(),
       start_datetime: edit_start,
       end_datetime:   edit_end,
     }),
@@ -2521,7 +2541,7 @@ function updateCalFilterIndicator() {
 function armCalFilterTimeout() {
   clearTimeout(state.calFilterTimeoutId);
   state.calFilterTimeoutId = setTimeout(() => {
-    state.calFilters = { event_type: '', entity_id: '', location_id: '' };
+    state.calFilters = { event_type: '', entity_id: '', location_id: '', format: '' };
     updateCalFilterIndicator();
     if (state.currentPage === 'home') renderCalendar();
   }, CAL_FILTER_TIMEOUT_MS);
@@ -2561,6 +2581,7 @@ async function populateCalFilterOptions() {
   document.getElementById('cal-filter-type').value = state.calFilters.event_type;
   entitySel.value = state.calFilters.entity_id;
   locationSel.value = state.calFilters.location_id;
+  document.getElementById('cal-filter-format').value = state.calFilters.format;
 }
 
 document.getElementById('btn-cal-filter').addEventListener('click', async () => {
@@ -2574,6 +2595,7 @@ document.getElementById('cal-filter-form').addEventListener('submit', function (
     event_type:  document.getElementById('cal-filter-type').value,
     entity_id:   document.getElementById('cal-filter-entity').value,
     location_id: document.getElementById('cal-filter-location').value,
+    format:      document.getElementById('cal-filter-format').value,
   };
   updateCalFilterIndicator();
   if (calFiltersActive()) armCalFilterTimeout(); else disarmCalFilterTimeout();
@@ -2582,7 +2604,7 @@ document.getElementById('cal-filter-form').addEventListener('submit', function (
 });
 
 document.getElementById('cal-filter-clear').addEventListener('click', () => {
-  state.calFilters = { event_type: '', entity_id: '', location_id: '' };
+  state.calFilters = { event_type: '', entity_id: '', location_id: '', format: '' };
   document.getElementById('cal-filter-form').reset();
   updateCalFilterIndicator();
   disarmCalFilterTimeout();
@@ -2599,9 +2621,11 @@ document.getElementById('btn-copy-feed-link').addEventListener('click', async ()
   const eventType = document.getElementById('cal-filter-type').value;
   const entityId = document.getElementById('cal-filter-entity').value;
   const locationId = document.getElementById('cal-filter-location').value;
+  const format = document.getElementById('cal-filter-format').value;
   if (eventType) params.set('event_type', eventType);
   if (entityId) params.set('entity_id', entityId);
   if (locationId) params.set('location_id', locationId);
+  if (format) params.set('format', format);
   const qs = params.toString();
   const url = `${location.origin}/api/feed.ics${qs ? '?' + qs : ''}`;
 

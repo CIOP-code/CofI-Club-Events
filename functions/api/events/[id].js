@@ -7,6 +7,16 @@ import { findLocationConflict, locationConflictMessage } from '../../utils/sched
 
 const EVENT_TYPES = ['meeting', 'social', 'academic', 'athletic', 'fundraiser', 'performance', 'other'];
 
+function isValidJoinUrl(url) {
+  if (!url) return true;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -48,9 +58,11 @@ export async function onRequestPut({ env, request, params, data }) {
   try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
 
   const { title, description, start_datetime, end_datetime, event_type } = body;
-  // location_id is nullable (an event can have no location), so a request that explicitly sends
-  // location_id: null means "clear it" and must be distinguished from a field the caller omitted.
+  // location_id/join_url are both nullable (an event can have no location and/or no join link),
+  // so a request that explicitly sends null means "clear it" and must be distinguished from a
+  // field the caller simply omitted.
   const nextLocationId = 'location_id' in body ? body.location_id : event.location_id;
+  const nextJoinUrl = 'join_url' in body ? (body.join_url || '').trim() : event.join_url;
   const nextStart = start_datetime ?? event.start_datetime;
   const nextEnd = end_datetime ?? event.end_datetime;
 
@@ -59,6 +71,9 @@ export async function onRequestPut({ env, request, params, data }) {
   }
   if (event_type && !EVENT_TYPES.includes(event_type)) {
     return json({ error: `event_type must be one of: ${EVENT_TYPES.join(', ')}` }, 400);
+  }
+  if (!isValidJoinUrl(nextJoinUrl)) {
+    return json({ error: 'join_url must be a valid http:// or https:// link' }, 400);
   }
 
   try {
@@ -71,7 +86,7 @@ export async function onRequestPut({ env, request, params, data }) {
     if (conflict) return json({ error: locationConflictMessage(conflict) }, 409);
 
     await env.DB.prepare(
-      `UPDATE events SET title=?, description=?, location_id=?, start_datetime=?, end_datetime=?, event_type=? WHERE id = ?`
+      `UPDATE events SET title=?, description=?, location_id=?, start_datetime=?, end_datetime=?, event_type=?, join_url=? WHERE id = ?`
     ).bind(
       title ?? event.title,
       description ?? event.description,
@@ -79,6 +94,7 @@ export async function onRequestPut({ env, request, params, data }) {
       nextStart,
       nextEnd,
       event_type ?? event.event_type,
+      nextJoinUrl || null,
       id
     ).run();
     return json({ message: 'Event updated' });

@@ -614,6 +614,7 @@ body {
 }
 .cal-event:hover { filter: brightness(1.08); transform: scale(1.01); }
 .cal-event .ev-title { font-weight: 600; }
+.ev-format-icon { font-size: .7em; opacity: .9; }
 .cal-event .ev-entity { opacity: .85; font-size: .66rem; }
 .cal-event .ev-location { opacity: .9; font-size: .68rem; margin-top: 2px; }
 /* Only actually visible when the block is tall enough -- .cal-event's overflow:hidden clips it

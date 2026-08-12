@@ -1,12 +1,32 @@
 /**
- * GET  /api/events?start=&end=&q=&entity_id=&event_type=&location_id=   – list events (optional
- *                                                    date range, text search, entity, type, and
- *                                                    location filters)
+ * GET  /api/events?start=&end=&q=&entity_id=&event_type=&location_id=&format=   – list events
+ *                                        (optional date range, text search, entity, type,
+ *                                        location, and virtual/hybrid/in_person format filters)
  * POST /api/events                                          – create a new event (requires entity or admin auth)
  */
 import { findLocationConflict, locationConflictMessage } from '../utils/scheduling.js';
 
 const EVENT_TYPES = ['meeting', 'social', 'academic', 'athletic', 'fundraiser', 'performance', 'other'];
+const EVENT_FORMATS = ['virtual', 'hybrid', 'in_person'];
+
+// "Virtual"/"Hybrid"/in-person isn't its own stored column -- it's derived from join_url +
+// location_id so the two can never drift out of sync with each other. Used both for the GET
+// filter below and for validating a fixed set of accepted values.
+const FORMAT_CONDITIONS = {
+  virtual:   `(e.join_url IS NOT NULL AND e.join_url != '' AND e.location_id IS NULL)`,
+  hybrid:    `(e.join_url IS NOT NULL AND e.join_url != '' AND e.location_id IS NOT NULL)`,
+  in_person: `(e.join_url IS NULL OR e.join_url = '')`,
+};
+
+function isValidJoinUrl(url) {
+  if (!url) return true; // empty/absent is fine -- it's optional
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -23,6 +43,7 @@ export async function onRequestGet({ env, request }) {
   const entityId = url.searchParams.get('entity_id');
   const eventType = url.searchParams.get('event_type');
   const locationId = url.searchParams.get('location_id');
+  const format = url.searchParams.get('format');
 
   let query = `
     SELECT e.*, en.name AS entity_name, en.type AS entity_type, l.name AS location_name
@@ -60,6 +81,10 @@ export async function onRequestGet({ env, request }) {
   if (locationId) {
     conditions.push(`e.location_id = ?`);
     params.push(locationId);
+  }
+
+  if (format && FORMAT_CONDITIONS[format]) {
+    conditions.push(FORMAT_CONDITIONS[format]);
   }
 
   if (conditions.length) query += ` WHERE ` + conditions.join(' AND ');
@@ -101,6 +126,11 @@ export async function onRequestPost({ env, request, data }) {
     return json({ error: `event_type must be one of: ${EVENT_TYPES.join(', ')}` }, 400);
   }
 
+  const join_url = (body.join_url || '').trim();
+  if (!isValidJoinUrl(join_url)) {
+    return json({ error: 'join_url must be a valid http:// or https:// link' }, 400);
+  }
+
   // Admin can specify any entity_id; entity users use their own entity_id
   const entity_id = user.type === 'admin' ? (body.entity_id || 0) : user.entity_id;
   if (!entity_id) {
@@ -112,9 +142,9 @@ export async function onRequestPost({ env, request, data }) {
     if (conflict) return json({ error: locationConflictMessage(conflict) }, 409);
 
     const result = await env.DB.prepare(
-      `INSERT INTO events (title, description, location_id, start_datetime, end_datetime, entity_id, event_type)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    ).bind(title, description || '', location_id || null, start_datetime, end_datetime, entity_id, event_type).run();
+      `INSERT INTO events (title, description, location_id, start_datetime, end_datetime, entity_id, event_type, join_url)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(title, description || '', location_id || null, start_datetime, end_datetime, entity_id, event_type, join_url || null).run();
 
     return json({ id: result.meta.last_row_id, message: 'Event created' }, 201);
   } catch (err) {

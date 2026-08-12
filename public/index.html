@@ -186,6 +186,11 @@
                     <div class="form-text">Or create a new location below if it doesn't exist.</div>
                     <input type="text" class="form-control mt-2" id="ev-new-location" placeholder="New location name (optional)" />
                   </div>
+                  <div class="mb-3">
+                    <label class="form-label" for="ev-join-url">Virtual Meeting Link</label>
+                    <input type="url" class="form-control" id="ev-join-url" placeholder="https://zoom.us/j/... (optional)" />
+                    <div class="form-text">Leave a location blank for a fully virtual event, or fill in both for hybrid.</div>
+                  </div>
                   <div class="row g-2">
                     <div class="col-sm-6">
                       <label class="form-label" for="ev-start">Start Date &amp; Time *</label>
@@ -340,6 +345,11 @@
                           <select class="form-select" id="adm-ev-location"></select>
                           <div class="form-text">Or add a new location below.</div>
                           <input type="text" class="form-control mt-2" id="adm-ev-new-location" placeholder="New location name (optional)" />
+                        </div>
+                        <div class="mb-2">
+                          <label class="form-label" for="adm-ev-join-url">Virtual Meeting Link</label>
+                          <input type="url" class="form-control" id="adm-ev-join-url" placeholder="https://zoom.us/j/... (optional)" />
+                          <div class="form-text">Leave location blank for fully virtual, or fill in both for hybrid.</div>
                         </div>
                         <div class="row g-2">
                           <div class="col-6">
@@ -738,6 +748,9 @@
         </div>
         <p id="event-modal-desc" class="mb-3"></p>
         <div class="d-flex flex-wrap gap-2">
+          <a id="event-modal-join-link" href="#" class="btn btn-sm btn-coi-secondary d-none" target="_blank" rel="noopener">
+            <i class="fa-solid fa-video me-1"></i>Join Online
+          </a>
           <a id="event-modal-ics-link" href="#" class="btn btn-sm btn-outline-secondary" download>
             <i class="fa-solid fa-calendar-plus me-1"></i>Add to Calendar
           </a>
@@ -847,10 +860,19 @@
               <option value="">All entities</option>
             </select>
           </div>
-          <div class="mb-3">
+          <div class="mb-2">
             <label class="form-label" for="cal-filter-location">Location</label>
             <select class="form-select" id="cal-filter-location">
               <option value="">All locations</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="cal-filter-format">Format</label>
+            <select class="form-select" id="cal-filter-format">
+              <option value="">In-person, virtual, or hybrid</option>
+              <option value="in_person">In-person</option>
+              <option value="virtual">Virtual</option>
+              <option value="hybrid">Hybrid</option>
             </select>
           </div>
           <div class="d-flex gap-2">
@@ -1170,6 +1192,10 @@
             <select class="form-select" id="edit-ev-location"></select>
             <div class="form-text">Or add a new location below.</div>
             <input type="text" class="form-control mt-2" id="edit-ev-new-location" placeholder="New location name (optional)" />
+          </div>
+          <div class="mb-2">
+            <label class="form-label" for="edit-ev-join-url">Virtual Meeting Link</label>
+            <input type="url" class="form-control" id="edit-ev-join-url" placeholder="https://zoom.us/j/... (optional)" />
           </div>
           <div class="row g-2">
             <div class="col-6">

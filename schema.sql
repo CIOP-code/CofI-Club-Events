@@ -20,6 +20,11 @@ CREATE TABLE IF NOT EXISTS locations (
 );
 
 -- Events table
+-- join_url is the only new concept for virtual/hybrid events -- "Virtual" vs "Hybrid" vs
+-- in-person is derived, not stored: join_url set + no location_id = Virtual, join_url set +
+-- location_id set = Hybrid, no join_url = in-person (regardless of location_id), matching how
+-- event_type/format filters are computed in functions/api/events.js rather than needing their
+-- own stored column that could drift out of sync with location_id.
 CREATE TABLE IF NOT EXISTS events (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
   title          TEXT    NOT NULL,
@@ -29,6 +34,7 @@ CREATE TABLE IF NOT EXISTS events (
   end_datetime   TEXT    NOT NULL,
   entity_id      INTEGER NOT NULL,
   event_type     TEXT    NOT NULL DEFAULT 'other' CHECK (event_type IN ('meeting', 'social', 'academic', 'athletic', 'fundraiser', 'performance', 'other')),
+  join_url       TEXT,
   created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (entity_id) REFERENCES entities(id) ON DELETE CASCADE,
   FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE SET NULL
@@ -129,3 +135,8 @@ CREATE INDEX IF NOT EXISTS idx_login_attempts_lookup ON login_attempts(ip, endpo
 -- nullable columns on the single-row admin table, plain ADD COLUMN, no rebuild needed.
 --   ALTER TABLE admin ADD COLUMN reset_token_hash TEXT;
 --   ALTER TABLE admin ADD COLUMN reset_token_expires DATETIME;
+
+-- Migration to add virtual/hybrid event support to an already-migrated events table. Plain ADD
+-- COLUMN, no rebuild needed -- Virtual/Hybrid/in-person is derived from join_url + location_id
+-- at query time, not stored.
+--   ALTER TABLE events ADD COLUMN join_url TEXT;
