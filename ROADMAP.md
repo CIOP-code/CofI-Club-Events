@@ -14,13 +14,15 @@ Turn the single-page admin dashboard into a real multi-section tool.
 
 - **Admin menu (multi-section panel).** Splits the dashboard into a Dashboard section
   (create/manage entities & events) and a Roadmap section, navigable via pills instead of one
-  long scroll.
+  long scroll. Later split further into top-level tabs (Events/Entities/Locations/Utilities/
+  Roadmap) with Create/Import/Export sub-tabs, once the single Dashboard section itself grew into
+  its own long scroll of eight stacked cards.
 - **In-app phased roadmap view.** This list, mirrored inside Admin → Roadmap.
 - **Edit entities & events in place.** Pencil-icon edit buttons open a modal instead of requiring
   delete-and-recreate, which used to lose an entity's id/password history or an event's data.
 - **"Program" entity type.** A fifth entity type alongside Club/Department/Office/Organization.
 
-## Phase 2 — Event Discovery Quick Wins
+## Phase 2 — Event Discovery Quick Wins *(shipped)*
 
 Small, mostly self-contained features inspired by events.brown.edu (LiveWhale Calendar) that make
 individual events easier to find, share, and get onto someone's own calendar.
@@ -47,9 +49,18 @@ individual events easier to find, share, and get onto someone's own calendar.
   (Meeting/Social/Academic/Athletic/Fundraiser/Performance/Other), filterable via the API and used
   in the PDF export (available to everyone, not just admins). Full free-form/multi-tag support (an event tagged with several
   categories at once) is still a possible future upgrade if the fixed list ever proves too narrow.
+- ~~**Calendar filtering.**~~ *(shipped)* A filter button on the calendar toolbar narrows the
+  visible events by type, entity, and location (`GET /api/events` gained a matching `location_id`
+  param alongside the existing `entity_id`/`event_type` ones). Applies across week/day/month views
+  and persists through navigation; clears itself on leaving the calendar page or after 20 minutes
+  idle, and the toolbar button shows a count badge when active, so a left-on filter doesn't quietly
+  make events look "missing."
 - **Subscribable filtered feed (RSS/iCal).** A live-updating feed URL reflecting the same filters
   as the Entities page (e.g. "just Chess Club"), so a calendar app stays in sync automatically
-  instead of a one-time `.ics` download.
+  instead of a one-time `.ics` download. Now more natural to build than when this was first
+  written: the calendar filter's `entity_id`/`event_type`/`location_id` query params already exist
+  server-side, so a feed endpoint could reuse them directly instead of designing filtering from
+  scratch.
 
 ## Phase 4 — Richer Event Types
 
@@ -81,6 +92,13 @@ individual events easier to find, share, and get onto someone's own calendar.
   across leadership turnover, with the admin password-reset flow handling handoffs). Would need
   named per-person logins if tracking who specifically posted each event ever becomes important —
   a bigger change, not scoped out.
+- ~~**Self-service admin password reset.**~~ *(shipped)* Previously, a forgotten admin password
+  could only be recovered by deleting the `admin` row directly in D1 (needing Cloudflare/`wrangler`
+  access, not just the app) — a real continuity risk for a single shared institutional account. A
+  "Forgot password?" link on the admin login page now emails a one-time reset link (30-minute
+  expiry, single-use, token stored only as a SHA-256 hash) to the recovery address configured in
+  Admin → Utilities → Notifications. Only actually solves succession if that address is
+  institutional (a shared inbox, an IT alias) rather than any one person's — see `SECURITY.md`.
 - **Usage analytics dashboard.** Turn the admin Dashboard tab into an actual dashboard: event
   count, how many entities have posted at least one event, PDF export count, and app views broken
   down by device (mobile vs desktop). Nothing today records page views or exports at all, so this
