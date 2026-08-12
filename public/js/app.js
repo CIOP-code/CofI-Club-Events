@@ -21,6 +21,7 @@ const state = {
   entitiesView: 'list',               // 'grid' | 'list' — icon tiles vs. compact rows on the Entities page
   calFilters: { event_type: '', entity_id: '', location_id: '' }, // calendar view filters
   calFilterTimeoutId: null,   // handle for the auto-clear timer armed while a filter is active
+  jumpCalAnchor: new Date(),  // which month the Jump-to-Date mini-calendar is showing
 };
 
 /* Ensure CSS variable for calendar header height matches the rendered size.
@@ -684,6 +685,75 @@ async function renderMonthGrid(grid) {
     });
   });
 }
+
+/* =============================================================
+   JUMP TO DATE (mini-calendar heat map -- also doubles as the "spot busy days" widget)
+   ============================================================= */
+async function renderJumpToDateGrid() {
+  const monthStart = new Date(state.jumpCalAnchor.getFullYear(), state.jumpCalAnchor.getMonth(), 1);
+  const monthEnd   = new Date(state.jumpCalAnchor.getFullYear(), state.jumpCalAnchor.getMonth() + 1, 0);
+  const gridStart  = getWeekStart(monthStart);
+  const gridEnd    = addDays(getWeekStart(monthEnd), 6);
+  const totalDays  = Math.round((gridEnd - gridStart) / 86400000) + 1;
+  const cells = Array.from({ length: totalDays }, (_, i) => addDays(gridStart, i));
+
+  document.getElementById('jump-cal-title').textContent = fmt(monthStart, { month: 'long', year: 'numeric' });
+
+  const events = await fetchEvents(isoLocal(gridStart), isoLocal(addDays(gridEnd, 1)));
+  const today = startOfDay(new Date());
+
+  const countByDay = new Map();
+  events.forEach(ev => {
+    const key = startOfDay(new Date(ev.start_datetime)).getTime();
+    countByDay.set(key, (countByDay.get(key) || 0) + 1);
+  });
+  const maxCount = Math.max(0, ...countByDay.values());
+
+  // Shade relative to the busiest day actually in view, not a fixed scale -- a quiet month should
+  // still show its busiest days as "darker", not read as uniformly empty.
+  function heatLevel(count) {
+    if (!count || !maxCount) return 0;
+    return Math.max(1, Math.ceil((count / maxCount) * 4));
+  }
+
+  let html = '';
+  DAYS_SHORT.forEach(d => { html += `<div class="mini-cal-dow">${d[0]}</div>`; });
+  cells.forEach(day => {
+    const inMonth = day.getMonth() === monthStart.getMonth();
+    const isToday = day.getTime() === today.getTime();
+    const count = countByDay.get(day.getTime()) || 0;
+    const level = heatLevel(count);
+    const title = count ? `${count} event${count === 1 ? '' : 's'}` : 'No events';
+    html += `<div class="mini-cal-cell${inMonth ? '' : ' dim'}${isToday ? ' today' : ''}${level ? ` heat-${level}` : ''}" data-date="${day.toISOString()}" title="${escHtml(title)}">${day.getDate()}</div>`;
+  });
+
+  document.getElementById('jump-cal-grid').innerHTML = html;
+
+  document.querySelectorAll('#jump-cal-grid .mini-cal-cell').forEach(cell => {
+    cell.addEventListener('click', () => {
+      state.calAnchorDate = new Date(cell.dataset.date);
+      state.calView = 'day';
+      bootstrap.Modal.getInstance(document.getElementById('jumpToDateModal'))?.hide();
+      if (state.currentPage === 'home') renderCalendar();
+    });
+  });
+}
+
+document.getElementById('btn-jump-to-date').addEventListener('click', () => {
+  state.jumpCalAnchor = new Date(state.calAnchorDate);
+  new bootstrap.Modal(document.getElementById('jumpToDateModal')).show();
+  renderJumpToDateGrid();
+});
+
+document.getElementById('jump-cal-prev').addEventListener('click', () => {
+  state.jumpCalAnchor = new Date(state.jumpCalAnchor.getFullYear(), state.jumpCalAnchor.getMonth() - 1, 1);
+  renderJumpToDateGrid();
+});
+
+document.getElementById('jump-cal-next').addEventListener('click', () => {
+  state.jumpCalAnchor = new Date(state.jumpCalAnchor.getFullYear(), state.jumpCalAnchor.getMonth() + 1, 1);
+  renderJumpToDateGrid();
+});
 
 function escHtml(str) {
   return String(str || '')

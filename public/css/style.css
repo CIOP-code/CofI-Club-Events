@@ -539,6 +539,43 @@ body {
 .month-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 .month-dot-more { font-size: .62rem; color: var(--color-muted); font-weight: 600; }
 
+/* Jump to Date / mini-calendar heat map -- much more compact than the full month-grid above,
+   shaded by event density instead of showing dots per event. */
+.mini-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+}
+.mini-cal-dow {
+  text-align: center;
+  font-size: .62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  letter-spacing: .03em;
+  padding-bottom: 2px;
+}
+.mini-cal-cell {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--color-strong);
+  cursor: pointer;
+  background: var(--color-border-3);
+  transition: filter .1s;
+}
+.mini-cal-cell:hover { filter: brightness(0.94); }
+.mini-cal-cell.dim { color: var(--color-muted); opacity: .5; }
+.mini-cal-cell.today { box-shadow: 0 0 0 2px var(--coi-blue) inset; }
+.mini-cal-cell.heat-1 { background: #ded1e6; }
+.mini-cal-cell.heat-2 { background: #c1a6d1; }
+.mini-cal-cell.heat-3 { background: #9b74b3; color: #fff; }
+.mini-cal-cell.heat-4 { background: var(--coi-blue); color: #fff; }
+
 @media (max-width: 575px) {
   .month-cell { min-height: 56px; padding: 4px; }
   .day-strip-pill { width: 40px; }

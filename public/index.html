@@ -68,6 +68,9 @@
                   <button class="cal-nav-btn" id="btn-prev"><i class="fa-solid fa-chevron-left"></i></button>
                   <button class="cal-nav-btn" id="btn-today">Today</button>
                   <button class="cal-nav-btn" id="btn-next"><i class="fa-solid fa-chevron-right"></i></button>
+                  <button class="cal-nav-btn" id="btn-jump-to-date" title="Jump to a date">
+                    <i class="fa-solid fa-calendar-day"></i>
+                  </button>
                   <h2 id="cal-title">Loading…</h2>
                   <div class="view-toggle ms-auto">
                     <button class="cal-nav-btn active" id="btn-view-week">Week</button>
@@ -899,6 +902,29 @@
             <i class="fa-solid fa-paper-plane me-1"></i>Send
           </button>
         </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Jump to Date Modal (mini month grid, shaded by event density -- also the mini-calendar heat map) -->
+<div class="modal fade" id="jumpToDateModal" tabindex="-1" aria-labelledby="jumpToDateModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:320px">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold" id="jumpToDateModalLabel">
+          <i class="fa-solid fa-calendar-day me-2"></i>Jump to a Date
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex align-items-center mb-2">
+          <button class="cal-nav-btn" id="jump-cal-prev"><i class="fa-solid fa-chevron-left"></i></button>
+          <span class="mx-auto fw-bold" id="jump-cal-title"></span>
+          <button class="cal-nav-btn" id="jump-cal-next"><i class="fa-solid fa-chevron-right"></i></button>
+        </div>
+        <div id="jump-cal-grid" class="mini-cal-grid"></div>
+        <p class="text-muted small mt-2 mb-0">Darker days have more events. Click a date to jump there.</p>
       </div>
     </div>
   </div>
