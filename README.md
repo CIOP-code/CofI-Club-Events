@@ -133,6 +133,12 @@ wrangler pages deploy public
 Navigate to **/admin** and log in with the `ADMIN_PASSWORD` value you set above.
 The admin account is bootstrapped automatically on first login.
 
+Once logged in, set a recovery email under **Admin → Utilities → Notifications** — this powers
+both the feedback-tool notifications and a "Forgot password?" self-service reset link on the
+admin login page. For institutional continuity (e.g. staff turnover), point it at a shared
+department inbox or IT alias rather than one person's individual email — see `SECURITY.md`'s
+"Recommendations for IT" for why that distinction matters.
+
 ### 6. (Optional) Bulk-import entities
 The **Bulk Import Entities** card on the Admin Dashboard is the easiest way to do this: paste one
 name per line, pick a type, and it creates them all through the same validation as creating one by

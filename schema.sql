@@ -35,11 +35,16 @@ CREATE TABLE IF NOT EXISTS events (
 );
 
 -- Admin table (single row, id always 1) — the College of Idaho Admin account
+-- reset_token_hash/reset_token_expires back the self-service "Forgot password" flow: a SHA-256
+-- hash of a random token (never the raw token itself -- same reasoning as password_hash never
+-- being a raw password), cleared again as soon as it's used or superseded by a newer request.
 CREATE TABLE IF NOT EXISTS admin (
-  id            INTEGER PRIMARY KEY CHECK (id = 1),
-  password_hash TEXT NOT NULL,
-  salt          TEXT NOT NULL,
-  notify_email  TEXT
+  id                   INTEGER PRIMARY KEY CHECK (id = 1),
+  password_hash        TEXT NOT NULL,
+  salt                 TEXT NOT NULL,
+  notify_email         TEXT,
+  reset_token_hash     TEXT,
+  reset_token_expires  DATETIME
 );
 
 -- Feedback / bug reports submitted by anyone (public, no login required), reviewed by the admin
@@ -119,3 +124,8 @@ CREATE INDEX IF NOT EXISTS idx_login_attempts_lookup ON login_attempts(ip, endpo
 --     contact_email TEXT,
 --     created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
 --   );
+
+-- Migration to add self-service admin password reset to an already-migrated database: two more
+-- nullable columns on the single-row admin table, plain ADD COLUMN, no rebuild needed.
+--   ALTER TABLE admin ADD COLUMN reset_token_hash TEXT;
+--   ALTER TABLE admin ADD COLUMN reset_token_expires DATETIME;

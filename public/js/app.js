@@ -1244,6 +1244,53 @@ document.getElementById('btn-admin-logout').addEventListener('click', () => {
   document.getElementById('admin-pw').value = '';
 });
 
+/* =============================================================
+   ADMIN PASSWORD RECOVERY (self-service, for succession -- no login required to trigger)
+   ============================================================= */
+document.getElementById('btn-admin-forgot-password').addEventListener('click', () => {
+  document.getElementById('admin-forgot-password-box').classList.toggle('d-none');
+});
+
+document.getElementById('btn-send-reset-link').addEventListener('click', async function () {
+  hideAlert('admin-forgot-password-msg');
+  this.disabled = true;
+  this.innerHTML = '<span class="spinner-sm"></span> Sending…';
+
+  const { ok, data } = await apiFetch('/api/auth/admin/forgot-password', { method: 'POST' });
+
+  this.disabled = false;
+  this.innerHTML = '<i class="fa-solid fa-paper-plane me-1"></i>Send Reset Link';
+
+  showAlert('admin-forgot-password-msg', ok ? data.message : (data.error || 'Failed to send reset link'), ok ? 'success' : 'danger');
+});
+
+document.getElementById('reset-admin-password-form').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideAlert('reset-admin-password-msg');
+
+  const newPw = document.getElementById('reset-admin-new-pw').value;
+  const confirmPw = document.getElementById('reset-admin-confirm-pw').value;
+  if (newPw !== confirmPw) { showAlert('reset-admin-password-msg', 'Passwords do not match'); return; }
+
+  const btn = this.querySelector('button[type=submit]');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-sm"></span> Updating…';
+
+  const { ok, data } = await apiFetch('/api/auth/admin/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ token: document.getElementById('reset-admin-token').value, new_password: newPw }),
+  });
+
+  btn.disabled = false;
+  btn.textContent = 'Set New Password';
+
+  if (!ok) { showAlert('reset-admin-password-msg', data.error || 'Failed to reset password'); return; }
+
+  showAlert('reset-admin-password-msg', 'Password updated! You can log in now.', 'success');
+  this.reset();
+  setTimeout(() => bootstrap.Modal.getInstance(document.getElementById('resetAdminPasswordModal'))?.hide(), 1500);
+});
+
 async function loadAdminData() {
   // Load entities for the dropdown + entities list
   const { ok, data } = await apiFetch('/api/entities');
@@ -2479,4 +2526,16 @@ navigate('home');
 (function handleInitialEventDeepLink() {
   const m = location.pathname.match(/^\/event\/(\d+)$/);
   if (m) openEventModalById(m[1], { pushState: false });
+})();
+
+// Support the emailed admin password-reset link (/?reset_token=...): jump to the Admin page and
+// open the "Set New Password" modal pre-filled with the token, then strip it from the visible
+// URL so it doesn't linger in the address bar or browser history after use.
+(function handleAdminResetTokenLink() {
+  const token = new URLSearchParams(location.search).get('reset_token');
+  if (!token) return;
+  document.getElementById('reset-admin-token').value = token;
+  navigate('admin');
+  new bootstrap.Modal(document.getElementById('resetAdminPasswordModal')).show();
+  history.replaceState({}, '', location.pathname);
 })();

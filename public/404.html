@@ -228,6 +228,16 @@
                   <i class="fa-solid fa-right-to-bracket me-1"></i>Login
                 </button>
               </form>
+              <button type="button" class="btn btn-link btn-sm mt-2 p-0" id="btn-admin-forgot-password">
+                Forgot password?
+              </button>
+              <div id="admin-forgot-password-box" class="d-none mt-3 text-start">
+                <p class="text-muted small mb-2">Sends a one-time reset link to the recovery email configured for this admin account (Utilities → Notifications).</p>
+                <div id="admin-forgot-password-msg" class="alert-inline d-none mb-2"></div>
+                <button type="button" class="btn-coi-secondary w-100" id="btn-send-reset-link">
+                  <i class="fa-solid fa-paper-plane me-1"></i>Send Reset Link
+                </button>
+              </div>
             </div>
 
             <!-- Admin panel (shown after login) -->
@@ -963,6 +973,36 @@
           </div>
           <div id="change-pw-msg" class="alert-inline d-none mb-2"></div>
           <button type="submit" class="btn-coi-primary w-100">Update Password</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SET NEW ADMIN PASSWORD MODAL (opened automatically from a ?reset_token= link emailed by
+     Forgot Password) -->
+<div class="modal fade" id="resetAdminPasswordModal" tabindex="-1" aria-labelledby="resetAdminPasswordModalLabel" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:380px">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold" id="resetAdminPasswordModalLabel">
+          <i class="fa-solid fa-key me-2"></i>Set New Admin Password
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="reset-admin-password-form">
+          <input type="hidden" id="reset-admin-token" />
+          <div class="mb-3">
+            <label class="form-label">New Password</label>
+            <input type="password" class="form-control" id="reset-admin-new-pw" required minlength="8" />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Confirm New Password</label>
+            <input type="password" class="form-control" id="reset-admin-confirm-pw" required />
+          </div>
+          <div id="reset-admin-password-msg" class="alert-inline d-none mb-2"></div>
+          <button type="submit" class="btn-coi-primary w-100">Set New Password</button>
         </form>
       </div>
     </div>

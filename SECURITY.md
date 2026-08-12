@@ -42,6 +42,21 @@ feature is reintroduced (tracked in `ROADMAP.md`, Phase 5).
   meaning a deployment that forgot to set it would silently accept forged admin tokens or the
   well-known default password instead of failing. That fallback has been removed; a missing secret
   now returns a `500` instead of running insecurely.
+- **Self-service admin password reset** (`functions/api/auth/admin/{forgot-password,reset-password}.js`):
+  since there's a single shared admin account (see above), a forgotten password previously meant
+  someone with Cloudflare/`wrangler` access had to delete the `admin` row directly in D1 so it
+  re-bootstrapped from `ADMIN_PASSWORD` on the next login — a real operational risk for
+  institutional continuity if the one person who knew the password (or had Cloudflare access)
+  became unreachable. `POST /api/auth/admin/forgot-password` emails a one-time link to the
+  recovery address configured in Admin → Utilities → Notifications (`admin.notify_email` — the
+  same field the feedback tool uses); `POST /api/auth/admin/reset-password` accepts that link's
+  token and sets a new password. The token: 256 bits of randomness (`generateRandomToken`,
+  `functions/utils/crypto.js`), never stored raw — only its SHA-256 hash
+  (`admin.reset_token_hash`) — expires after 30 minutes, and is cleared the moment it's used, so a
+  captured or reused link can't work twice. **This only actually solves the succession problem if
+  the recovery email is an institutional address** (a shared department inbox, an IT alias) rather
+  than tied to one person — pointed at a personal account, it just relocates the same
+  single-point-of-failure it was meant to remove.
 
 ## Authorization
 
@@ -58,13 +73,16 @@ frontend hiding a button is not treated as access control):
 | View events/entities | Public, no login required |
 | Submit feedback/a bug report | Public, no login required |
 | View/delete feedback, set the notify email | Admin only |
+| Request/complete an admin password reset | Public, no login required (that's the point — see Authentication above) |
 
 See the `onRequestPost`/`onRequestPut`/`onRequestDelete` handlers in `functions/api/entities.js`,
 `functions/api/entities/[id].js`, `functions/api/events.js`, `functions/api/events/[id].js`,
-`functions/api/feedback.js`, `functions/api/feedback/[id].js`, and `functions/api/admin/settings.js`
-for the exact checks. The feedback submission endpoint is deliberately public and unauthenticated —
-same trust level as browsing the calendar — since requiring a login would defeat the point of a
-low-friction bug-report/suggestion box.
+`functions/api/feedback.js`, `functions/api/feedback/[id].js`, `functions/api/admin/settings.js`,
+and `functions/api/auth/admin/{forgot-password,reset-password}.js` for the exact checks. The
+feedback submission and admin-password-reset endpoints are deliberately public and
+unauthenticated — the former needs no more trust than browsing the calendar, and the latter's
+whole purpose is regaining access without a login, secured instead by possession of the emailed
+token.
 
 ## Rate limiting
 
@@ -82,7 +100,13 @@ The same mechanism (same table, same 8-per-15-minutes window) also throttles `PO
 — counting every accepted submission rather than only failures, since that's the only public,
 unauthenticated *write* endpoint in the app and the one most worth protecting from a scripted
 flood: unlike a login attempt, a feedback spam campaign also burns through the Resend
-send-notification quota (see "Third-party dependencies" below), not just database rows.
+send-notification quota (see "Third-party dependencies" below), not just database rows. Admin
+password reset requests (`POST /api/auth/admin/forgot-password`) get the same treatment for the
+same reason — every request sends a real email. The second step, `POST /api/auth/admin/reset-password`
+(where the actual token gets checked), is deliberately *not* rate-limited: the token is 256 bits
+of randomness, and no realistic guessing attempt gets meaningfully closer to it within the
+30-minute window regardless of how many attempts are allowed, so a throttle there adds complexity
+without adding real protection.
 
 ## Injection & XSS
 
@@ -205,3 +229,8 @@ this codebase, so they're IT's call to make, not something a PR can turn on:
 4. Confirm `JWT_SECRET` and `ADMIN_PASSWORD` are set as **Cloudflare secrets** (not plaintext vars)
    for the production environment, and are strong, unique values — not the local-dev placeholders
    documented in `README.md`.
+5. Set the admin account's recovery email (Admin → Utilities → Notifications) to an
+   **institutional address** — a shared department inbox or IT alias, not any one staff member's
+   personal or individual work email. The self-service password reset flow (see Authentication
+   above) only actually solves the "what if the admin leaves" problem if whoever needs to take
+   over can reach that inbox independent of the departing person.
