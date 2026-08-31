@@ -29,9 +29,14 @@ export async function checkRateLimit(env, request, endpoint) {
 }
 
 /**
- * Call after a failed login (wrong password, unknown entity, etc.).
+ * Records one attempt against the window checkRateLimit() counts. Despite the table name
+ * (login_attempts, from when this was login-only), it's now reused as-is for any endpoint worth
+ * throttling by IP -- the columns were already generic (ip, endpoint, timestamp), so a new table
+ * for the same shape would just be duplication. Feedback submission (functions/api/feedback.js)
+ * calls this on every submission, not just failures, since unlike a login attempt there's no
+ * "wrong password" case to distinguish -- the thing worth limiting is volume, full stop.
  */
-export async function recordFailedAttempt(env, ip, endpoint) {
+export async function recordAttempt(env, ip, endpoint) {
   await env.DB.prepare(
     `INSERT INTO login_attempts (ip, endpoint) VALUES (?, ?)`
   ).bind(ip, endpoint).run();
@@ -40,3 +45,6 @@ export async function recordFailedAttempt(env, ip, endpoint) {
     `DELETE FROM login_attempts WHERE attempted_at < datetime('now', '-1 day')`
   ).run();
 }
+
+/** Back-compat name for the login call sites, where "attempt" specifically means "failed login." */
+export const recordFailedAttempt = recordAttempt;

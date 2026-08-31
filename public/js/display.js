@@ -1,0 +1,110 @@
+/**
+ * Standalone read-only kiosk view for a TV/public display: today + the next two days.
+ * Intentionally separate from app.js — no login/admin/entity-management code is loaded here
+ * at all, since this is meant to run unattended on a public screen. Only hits the public
+ * GET /api/entities and GET /api/events endpoints (no auth).
+ */
+const MAX_EVENTS_PER_DAY = 8;
+const REFRESH_INTERVAL_MS = 5 * 60 * 1000;   // re-fetch + re-render every 5 minutes
+const RELOAD_INTERVAL_MS  = 24 * 60 * 60 * 1000; // full reload once a day (hygiene reset)
+
+const PALETTE = [
+  '#1565c0','#6a1b9a','#00695c','#b71c1c','#e65100',
+  '#37474f','#4527a0','#2e7d32','#ad1457','#0277bd',
+];
+const DAYS_SHORT = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+function escHtml(str) {
+  return String(str || '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function startOfDay(d) { const n = new Date(d); n.setHours(0,0,0,0); return n; }
+function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
+function isoLocal(d) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
+}
+function fmtTime(d) { return d.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' }); }
+
+async function fetchJson(path) {
+  const res = await fetch(path);
+  if (!res.ok) throw new Error(`${path} -> ${res.status}`);
+  return res.json();
+}
+
+function buildColorMap(entities) {
+  const map = new Map();
+  [...entities].sort((a, b) => a.id - b.id).forEach((en, i) => map.set(en.id, PALETTE[i % PALETTE.length]));
+  return map;
+}
+
+function renderClock() {
+  document.getElementById('kiosk-clock').textContent =
+    new Date().toLocaleString('en-US', { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+// ?days=N lets the number of columns be tuned per-screen (e.g. /display.html?days=4)
+// without a redeploy. Clamped to keep columns from getting too narrow to read at a distance.
+const DAY_COUNT = Math.min(5, Math.max(1, parseInt(new URLSearchParams(location.search).get('days'), 10) || 3));
+document.documentElement.style.setProperty('--day-count', DAY_COUNT);
+
+async function loadAndRender() {
+  const today = startOfDay(new Date());
+  const days = Array.from({ length: DAY_COUNT }, (_, i) => addDays(today, i));
+  const rangeStart = isoLocal(days[0]);
+  const rangeEnd = isoLocal(addDays(days[days.length - 1], 1));
+
+  try {
+    const [entitiesData, eventsData] = await Promise.all([
+      fetchJson('/api/entities'),
+      fetchJson(`/api/events?start=${rangeStart}&end=${rangeEnd}`),
+    ]);
+    const colorMap = buildColorMap(entitiesData.entities || []);
+    const events = (eventsData.events || []).slice().sort((a, b) => new Date(a.start_datetime) - new Date(b.start_datetime));
+
+    const daysEl = document.getElementById('days');
+    daysEl.innerHTML = days.map(day => {
+      const isToday = day.getTime() === today.getTime();
+      const dayEvents = events.filter(ev => startOfDay(new Date(ev.start_datetime)).getTime() === day.getTime());
+      const shown = dayEvents.slice(0, MAX_EVENTS_PER_DAY);
+      const overflow = dayEvents.length - shown.length;
+
+      const rowsHtml = shown.length
+        ? shown.map(ev => {
+            const start = new Date(ev.start_datetime);
+            const end = new Date(ev.end_datetime);
+            const color = colorMap.get(ev.entity_id) || PALETTE[ev.entity_id % PALETTE.length];
+            return `<div class="event-row">
+              <span class="event-dot" style="background:${color}"></span>
+              <div class="event-info">
+                <div class="event-time">${fmtTime(start)} – ${fmtTime(end)}</div>
+                <div class="event-title">${escHtml(ev.title)}</div>
+                <div class="event-meta">${escHtml(ev.entity_name || '')}${ev.location_name ? ' · ' + escHtml(ev.location_name) : ''}</div>
+              </div>
+            </div>`;
+          }).join('')
+        : `<div class="day-empty">No events scheduled</div>`;
+
+      return `<div class="day-col${isToday ? ' is-today' : ''}">
+        <h2>${DAYS_SHORT[day.getDay()]}</h2>
+        <p class="day-sub">${day.toLocaleString('en-US', { month: 'long', day: 'numeric' })}</p>
+        <div class="event-list">
+          ${rowsHtml}
+          ${overflow > 0 ? `<div class="day-overflow">+${overflow} more</div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+
+    document.getElementById('kiosk-error').style.display = 'none';
+  } catch (err) {
+    // Keep whatever was last successfully rendered on screen; just flag that a refresh failed.
+    document.getElementById('kiosk-error').style.display = 'block';
+  }
+}
+
+renderClock();
+loadAndRender();
+setInterval(renderClock, 30 * 1000);
+setInterval(loadAndRender, REFRESH_INTERVAL_MS);
+setTimeout(() => location.reload(), RELOAD_INTERVAL_MS);

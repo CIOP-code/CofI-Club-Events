@@ -68,6 +68,9 @@
                   <button class="cal-nav-btn" id="btn-prev"><i class="fa-solid fa-chevron-left"></i></button>
                   <button class="cal-nav-btn" id="btn-today">Today</button>
                   <button class="cal-nav-btn" id="btn-next"><i class="fa-solid fa-chevron-right"></i></button>
+                  <button class="cal-nav-btn" id="btn-jump-to-date" title="Jump to a date">
+                    <i class="fa-solid fa-calendar-day"></i>
+                  </button>
                   <h2 id="cal-title">Loading…</h2>
                   <div class="view-toggle ms-auto">
                     <button class="cal-nav-btn active" id="btn-view-week">Week</button>
@@ -76,6 +79,14 @@
                   </div>
                   <button class="cal-nav-btn" id="btn-event-search" title="Search events">
                     <i class="fa-solid fa-magnifying-glass"></i>
+                  </button>
+                  <button class="cal-nav-btn" id="btn-export-pdf" title="Export events as PDF">
+                    <i class="fa-solid fa-file-pdf"></i>
+                  </button>
+                  <button class="cal-nav-btn" id="btn-cal-filter" title="Filter events">
+                    <i class="fa-solid fa-filter"></i>
+                    <span class="d-none d-sm-inline">Filter</span>
+                    <span class="filter-badge d-none" id="cal-filter-badge">0</span>
                   </button>
                   <!-- day headers will be rendered here so they stick with the calendar header -->
                   <div class="days-headers" id="days-headers"></div>
@@ -158,10 +169,27 @@
                     <textarea class="form-control" id="ev-desc" rows="3"></textarea>
                   </div>
                   <div class="mb-3">
+                    <label class="form-label" for="ev-type">Event Type</label>
+                    <select class="form-select" id="ev-type">
+                      <option value="meeting">Meeting</option>
+                      <option value="social">Social</option>
+                      <option value="academic">Academic</option>
+                      <option value="athletic">Athletic</option>
+                      <option value="fundraiser">Fundraiser</option>
+                      <option value="performance">Performance</option>
+                      <option value="other" selected>Other</option>
+                    </select>
+                  </div>
+                  <div class="mb-3">
                     <label class="form-label" for="ev-location">Location *</label>
                     <select class="form-select" id="ev-location"></select>
                     <div class="form-text">Or create a new location below if it doesn't exist.</div>
                     <input type="text" class="form-control mt-2" id="ev-new-location" placeholder="New location name (optional)" />
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label" for="ev-join-url">Virtual Meeting Link</label>
+                    <input type="url" class="form-control" id="ev-join-url" placeholder="https://zoom.us/j/... (optional)" />
+                    <div class="form-text">Leave a location blank for a fully virtual event, or fill in both for hybrid.</div>
                   </div>
                   <div class="row g-2">
                     <div class="col-sm-6">
@@ -171,6 +199,33 @@
                     <div class="col-sm-6">
                       <label class="form-label" for="ev-end">End Date &amp; Time *</label>
                       <input type="datetime-local" class="form-control" id="ev-end" required />
+                    </div>
+                  </div>
+                  <div class="form-check mt-3">
+                    <input type="checkbox" class="form-check-input" id="ev-repeats" />
+                    <label class="form-check-label" for="ev-repeats">Repeats</label>
+                  </div>
+                  <div id="ev-repeat-options" class="d-none mt-2">
+                    <div class="row g-2">
+                      <div class="col-sm-6">
+                        <label class="form-label" for="ev-repeat-freq">Frequency</label>
+                        <select class="form-select" id="ev-repeat-freq">
+                          <option value="weekly">Weekly</option>
+                          <option value="monthly">Monthly</option>
+                        </select>
+                      </div>
+                      <div class="col-sm-6">
+                        <label class="form-label" for="ev-repeat-interval">Every</label>
+                        <div class="input-group">
+                          <input type="number" class="form-control" id="ev-repeat-interval" min="1" value="1" />
+                          <span class="input-group-text" id="ev-repeat-interval-unit">week(s)</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="mt-2">
+                      <label class="form-label" for="ev-repeat-until">Repeat Until *</label>
+                      <input type="date" class="form-control" id="ev-repeat-until" />
+                      <div class="form-text">Up to 52 events will be created.</div>
                     </div>
                   </div>
                   <div id="create-event-msg" class="alert-inline d-none"></div>
@@ -208,6 +263,16 @@
                   <i class="fa-solid fa-right-to-bracket me-1"></i>Login
                 </button>
               </form>
+              <button type="button" class="btn btn-link btn-sm mt-2 p-0" id="btn-admin-forgot-password">
+                Forgot password?
+              </button>
+              <div id="admin-forgot-password-box" class="d-none mt-3 text-start">
+                <p class="text-muted small mb-2">Sends a one-time reset link to the recovery email configured for this admin account (Utilities → Notifications).</p>
+                <div id="admin-forgot-password-msg" class="alert-inline d-none mb-2"></div>
+                <button type="button" class="btn-coi-secondary w-100" id="btn-send-reset-link">
+                  <i class="fa-solid fa-paper-plane me-1"></i>Send Reset Link
+                </button>
+              </div>
             </div>
 
             <!-- Admin panel (shown after login) -->
@@ -224,8 +289,23 @@
 
               <ul class="nav nav-pills admin-subnav px-2" id="admin-subnav">
                 <li class="nav-item">
-                  <button type="button" class="nav-link active" data-admin-section="dashboard">
-                    <i class="fa-solid fa-gauge me-1"></i>Dashboard
+                  <button type="button" class="nav-link active" data-admin-section="events">
+                    <i class="fa-solid fa-calendar-days me-1"></i>Events
+                  </button>
+                </li>
+                <li class="nav-item">
+                  <button type="button" class="nav-link" data-admin-section="entities">
+                    <i class="fa-solid fa-people-group me-1"></i>Entities
+                  </button>
+                </li>
+                <li class="nav-item">
+                  <button type="button" class="nav-link" data-admin-section="locations">
+                    <i class="fa-solid fa-location-dot me-1"></i>Locations
+                  </button>
+                </li>
+                <li class="nav-item">
+                  <button type="button" class="nav-link" data-admin-section="utilities">
+                    <i class="fa-solid fa-toolbox me-1"></i>Utilities
                   </button>
                 </li>
                 <li class="nav-item">
@@ -235,171 +315,397 @@
                 </li>
               </ul>
 
-              <div id="admin-section-dashboard" class="admin-section">
-              <div id="admin-actions" class="row g-3 px-2">
-                <!-- Create Entity -->
-                <div class="col-12 col-md-6">
-                  <div class="section-card">
-                    <h4><i class="fa-solid fa-plus-circle me-2"></i>Create Entity</h4>
-                    <form id="create-entity-form">
-                      <div class="mb-2">
-                        <label class="form-label" for="ent-name">Entity Name *</label>
-                        <input type="text" class="form-control" id="ent-name" required />
-                      </div>
-                      <div class="mb-2">
-                        <label class="form-label" for="ent-type">Type *</label>
-                        <select class="form-select" id="ent-type" required>
-                          <option value="club">Club</option>
-                          <option value="department">Department</option>
-                          <option value="office">Office</option>
-                          <option value="organization">Organization</option>
-                          <option value="program">Program</option>
-                        </select>
-                      </div>
-                      <!-- Entity logo removed: use Font Awesome icon instead -->
-                      <div class="mb-2">
-                        <label class="form-label" for="ent-pw">Default Password *</label>
-                        <input type="text" class="form-control" id="ent-pw" required minlength="8"
-                               placeholder="Entity will change this on first login" />
-                      </div>
-                      <div id="create-entity-msg" class="alert-inline d-none mb-2"></div>
-                      <button type="submit" class="btn-coi-secondary mt-1">
-                        <i class="fa-solid fa-plus me-1"></i>Create Entity
-                      </button>
-                    </form>
-                  </div>
-                </div>
+              <!-- ============================= EVENTS ============================= -->
+              <div id="admin-section-events" class="admin-section">
+                <ul class="nav nav-pills admin-subnav2 mb-3 px-2" data-subnav-scope="events">
+                  <li class="nav-item">
+                    <button type="button" class="nav-link active" data-sub-section="events-create">
+                      <i class="fa-solid fa-plus me-1"></i>Create
+                    </button>
+                  </li>
+                  <li class="nav-item">
+                    <button type="button" class="nav-link" data-sub-section="events-import">
+                      <i class="fa-solid fa-file-import me-1"></i>Import
+                    </button>
+                  </li>
+                  <li class="nav-item">
+                    <button type="button" class="nav-link" data-sub-section="events-export">
+                      <i class="fa-solid fa-file-pdf me-1"></i>Export
+                    </button>
+                  </li>
+                </ul>
 
-                <!-- Create Event (admin) -->
-                <div class="col-12 col-md-6">
-                  <div class="section-card">
-                    <h4><i class="fa-solid fa-calendar-plus me-2"></i>Create Event</h4>
-                    <form id="admin-create-event-form">
-                      <div class="mb-2">
-                        <label class="form-label" for="adm-ev-entity">Entity *</label>
-                        <select class="form-select" id="adm-ev-entity" required>
-                          <option value="">– select entity –</option>
-                        </select>
-                      </div>
-                      <div class="mb-2">
-                        <label class="form-label" for="adm-ev-title">Event Name *</label>
-                        <input type="text" class="form-control" id="adm-ev-title" required />
-                      </div>
-                      <div class="mb-2">
-                        <label class="form-label" for="adm-ev-desc">Description</label>
-                        <textarea class="form-control" id="adm-ev-desc" rows="2"></textarea>
-                      </div>
-                      <div class="mb-2">
-                        <label class="form-label" for="adm-ev-location">Location</label>
-                        <select class="form-select" id="adm-ev-location"></select>
-                        <div class="form-text">Or add a new location below.</div>
-                        <input type="text" class="form-control mt-2" id="adm-ev-new-location" placeholder="New location name (optional)" />
-                      </div>
-                      <div class="row g-2">
-                        <div class="col-6">
-                          <label class="form-label" for="adm-ev-start">Start *</label>
-                          <input type="datetime-local" class="form-control" id="adm-ev-start" required />
+                <div id="admin-sub-events-create" class="admin-subsection row g-3 px-2" data-scope="events">
+                  <!-- Create Event (admin) -->
+                  <div class="col-12 col-md-6">
+                    <div class="section-card">
+                      <h4><i class="fa-solid fa-calendar-plus me-2"></i>Create Event</h4>
+                      <form id="admin-create-event-form">
+                        <div class="mb-2">
+                          <label class="form-label" for="adm-ev-entity">Entity *</label>
+                          <select class="form-select" id="adm-ev-entity" required>
+                            <option value="">– select entity –</option>
+                          </select>
                         </div>
-                        <div class="col-6">
-                          <label class="form-label" for="adm-ev-end">End *</label>
-                          <input type="datetime-local" class="form-control" id="adm-ev-end" required />
+                        <div class="mb-2">
+                          <label class="form-label" for="adm-ev-title">Event Name *</label>
+                          <input type="text" class="form-control" id="adm-ev-title" required />
                         </div>
-                      </div>
-                      <div id="adm-create-event-msg" class="alert-inline d-none mb-2"></div>
-                      <button type="submit" class="btn-coi-secondary mt-2">
-                        <i class="fa-solid fa-plus me-1"></i>Create Event
-                      </button>
-                    </form>
-                  </div>
-                </div>
-
-                <!-- Bulk Import Entities -->
-                <div class="col-12">
-                  <div class="section-card">
-                    <h4><i class="fa-solid fa-file-import me-2"></i>Bulk Import Entities</h4>
-                    <p class="text-muted small">Paste one name per line (e.g. from a club list) — each is created with the type below and a random temporary password, same as creating one individually. Names that already exist are skipped, not treated as an error.</p>
-                    <form id="bulk-import-form">
-                      <div class="mb-2">
-                        <label class="form-label" for="bulk-import-type">Type (applies to all)</label>
-                        <select class="form-select" id="bulk-import-type" style="max-width:220px">
-                          <option value="club">Club</option>
-                          <option value="department">Department</option>
-                          <option value="office">Office</option>
-                          <option value="organization">Organization</option>
-                          <option value="program">Program</option>
-                        </select>
-                      </div>
-                      <div class="mb-2">
-                        <label class="form-label" for="bulk-import-names">Names (one per line)</label>
-                        <textarea class="form-control" id="bulk-import-names" rows="6" placeholder="AFRO Club&#10;Alpine Club&#10;Art Club"></textarea>
-                      </div>
-                      <div id="bulk-import-msg" class="alert-inline d-none mb-2"></div>
-                      <button type="submit" class="btn-coi-secondary mt-1">
-                        <i class="fa-solid fa-file-import me-1"></i>Import
-                      </button>
-                    </form>
-                    <div id="bulk-import-results" class="mt-3"></div>
-                  </div>
-                </div>
-
-                <!-- Bulk Import Locations -->
-                <div class="col-12">
-                  <div class="section-card">
-                    <h4><i class="fa-solid fa-location-dot me-2"></i>Bulk Import Locations</h4>
-                    <p class="text-muted small">Paste one location name per line — added to the shared location list used when creating events. Names that already exist are skipped, not treated as an error.</p>
-                    <form id="bulk-import-locations-form">
-                      <div class="mb-2">
-                        <label class="form-label" for="bulk-import-locations-names">Names (one per line)</label>
-                        <textarea class="form-control" id="bulk-import-locations-names" rows="6" placeholder="Jewett Auditorium&#10;McCain&#10;Boone Hall"></textarea>
-                      </div>
-                      <div id="bulk-import-locations-msg" class="alert-inline d-none mb-2"></div>
-                      <button type="submit" class="btn-coi-secondary mt-1">
-                        <i class="fa-solid fa-file-import me-1"></i>Import
-                      </button>
-                    </form>
-                    <div id="bulk-import-locations-results" class="mt-3"></div>
-                  </div>
-                </div>
-
-                <!-- Entities list (admin can delete) -->
-                <div class="col-12">
-                  <div class="section-card">
-                    <h4><i class="fa-solid fa-list me-2"></i>All Entities</h4>
-                    <div id="admin-entities-list">Loading…</div>
-                  </div>
-                </div>
-
-                <!-- Events list (admin can edit/delete; browsable by week/month, not just upcoming,
-                     so past events are reachable too) -->
-                <div class="col-12">
-                  <div class="section-card">
-                    <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
-                      <h4 class="mb-0 me-auto"><i class="fa-solid fa-calendar-week me-2"></i>Events</h4>
-                      <button class="cal-nav-btn" id="adm-ev-prev" title="Previous"><i class="fa-solid fa-chevron-left"></i></button>
-                      <button class="cal-nav-btn" id="adm-ev-today">Today</button>
-                      <button class="cal-nav-btn" id="adm-ev-next" title="Next"><i class="fa-solid fa-chevron-right"></i></button>
-                      <div class="view-toggle">
-                        <button class="cal-nav-btn active" id="adm-ev-view-week">Week</button>
-                        <button class="cal-nav-btn" id="adm-ev-view-month">Month</button>
-                      </div>
+                        <div class="mb-2">
+                          <label class="form-label" for="adm-ev-desc">Description</label>
+                          <textarea class="form-control" id="adm-ev-desc" rows="2"></textarea>
+                        </div>
+                        <div class="mb-2">
+                          <label class="form-label" for="adm-ev-type">Event Type</label>
+                          <select class="form-select" id="adm-ev-type">
+                            <option value="meeting">Meeting</option>
+                            <option value="social">Social</option>
+                            <option value="academic">Academic</option>
+                            <option value="athletic">Athletic</option>
+                            <option value="fundraiser">Fundraiser</option>
+                            <option value="performance">Performance</option>
+                            <option value="other" selected>Other</option>
+                          </select>
+                        </div>
+                        <div class="mb-2">
+                          <label class="form-label" for="adm-ev-location">Location</label>
+                          <select class="form-select" id="adm-ev-location"></select>
+                          <div class="form-text">Or add a new location below.</div>
+                          <input type="text" class="form-control mt-2" id="adm-ev-new-location" placeholder="New location name (optional)" />
+                        </div>
+                        <div class="mb-2">
+                          <label class="form-label" for="adm-ev-join-url">Virtual Meeting Link</label>
+                          <input type="url" class="form-control" id="adm-ev-join-url" placeholder="https://zoom.us/j/... (optional)" />
+                          <div class="form-text">Leave location blank for fully virtual, or fill in both for hybrid.</div>
+                        </div>
+                        <div class="row g-2">
+                          <div class="col-6">
+                            <label class="form-label" for="adm-ev-start">Start *</label>
+                            <input type="datetime-local" class="form-control" id="adm-ev-start" required />
+                          </div>
+                          <div class="col-6">
+                            <label class="form-label" for="adm-ev-end">End *</label>
+                            <input type="datetime-local" class="form-control" id="adm-ev-end" required />
+                          </div>
+                        </div>
+                        <div class="form-check mt-2">
+                          <input type="checkbox" class="form-check-input" id="adm-ev-repeats" />
+                          <label class="form-check-label" for="adm-ev-repeats">Repeats</label>
+                        </div>
+                        <div id="adm-ev-repeat-options" class="d-none mt-2">
+                          <div class="row g-2">
+                            <div class="col-6">
+                              <label class="form-label" for="adm-ev-repeat-freq">Frequency</label>
+                              <select class="form-select" id="adm-ev-repeat-freq">
+                                <option value="weekly">Weekly</option>
+                                <option value="monthly">Monthly</option>
+                              </select>
+                            </div>
+                            <div class="col-6">
+                              <label class="form-label" for="adm-ev-repeat-interval">Every</label>
+                              <div class="input-group">
+                                <input type="number" class="form-control" id="adm-ev-repeat-interval" min="1" value="1" />
+                                <span class="input-group-text" id="adm-ev-repeat-interval-unit">week(s)</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div class="mt-2">
+                            <label class="form-label" for="adm-ev-repeat-until">Repeat Until *</label>
+                            <input type="date" class="form-control" id="adm-ev-repeat-until" />
+                            <div class="form-text">Up to 52 events will be created.</div>
+                          </div>
+                        </div>
+                        <div id="adm-create-event-msg" class="alert-inline d-none mb-2"></div>
+                        <button type="submit" class="btn-coi-secondary mt-2">
+                          <i class="fa-solid fa-plus me-1"></i>Create Event
+                        </button>
+                      </form>
                     </div>
-                    <p class="text-muted small mb-2" id="adm-ev-range-label"></p>
-                    <div id="admin-events-list">Loading…</div>
                   </div>
-                </div>
 
-                <!-- Locations list (admin can delete; entity-or-admin can rename, matching who can create one) -->
-                <div class="col-12">
-                  <div class="section-card">
-                    <h4><i class="fa-solid fa-location-dot me-2"></i>All Locations</h4>
-                    <div id="admin-locations-list">Loading…</div>
+                  <!-- Events list (admin can edit/delete; browsable by week/month, not just upcoming,
+                       so past events are reachable too) -->
+                  <div class="col-12">
+                    <div class="section-card">
+                      <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
+                        <h4 class="mb-0 me-auto"><i class="fa-solid fa-calendar-week me-2"></i>Events</h4>
+                        <button class="cal-nav-btn" id="adm-ev-prev" title="Previous"><i class="fa-solid fa-chevron-left"></i></button>
+                        <button class="cal-nav-btn" id="adm-ev-today">Today</button>
+                        <button class="cal-nav-btn" id="adm-ev-next" title="Next"><i class="fa-solid fa-chevron-right"></i></button>
+                        <div class="view-toggle">
+                          <button class="cal-nav-btn active" id="adm-ev-view-week">Week</button>
+                          <button class="cal-nav-btn" id="adm-ev-view-month">Month</button>
+                        </div>
+                      </div>
+                      <p class="text-muted small mb-2" id="adm-ev-range-label"></p>
+                      <div id="admin-events-list">Loading…</div>
+                    </div>
+                  </div>
+                </div><!-- /admin-sub-events-create -->
+
+                <div id="admin-sub-events-import" class="admin-subsection row g-3 d-none px-2" data-scope="events">
+                  <!-- Bulk Import Events -->
+                  <div class="col-12">
+                    <div class="section-card">
+                      <h4><i class="fa-solid fa-file-import me-2"></i>Bulk Import Events</h4>
+                      <p class="text-muted small">
+                        One event per line, fields separated by <code>|</code>:<br />
+                        <code>Entity Name | Title | Start | End | Location | Type | Description</code><br />
+                        Start/End use <code>YYYY-MM-DD HH:MM</code> (24-hour). Location, Type, and
+                        Description are optional — Type defaults to "Other" when blank, and Location is
+                        created automatically if it doesn't already exist. The Entity must already exist.
+                      </p>
+                      <form id="bulk-import-events-form">
+                        <div class="mb-2">
+                          <textarea class="form-control" id="bulk-import-events-rows" rows="8"
+                                    placeholder="Chess Club | Weekly Meeting | 2026-09-02 18:00 | 2026-09-02 19:00 | McCain | meeting | Come play chess!"></textarea>
+                        </div>
+                        <div id="bulk-import-events-msg" class="alert-inline d-none mb-2"></div>
+                        <button type="submit" class="btn-coi-secondary mt-1">
+                          <i class="fa-solid fa-file-import me-1"></i>Import
+                        </button>
+                      </form>
+                      <div id="bulk-import-events-results" class="mt-3"></div>
+                    </div>
+                  </div>
+                </div><!-- /admin-sub-events-import -->
+
+                <div id="admin-sub-events-export" class="admin-subsection row g-3 d-none px-2" data-scope="events">
+                  <!-- Export Events PDF -->
+                  <div class="col-12 col-md-6">
+                    <div class="section-card">
+                      <h4><i class="fa-solid fa-file-pdf me-2"></i>Export Events PDF</h4>
+                      <p class="text-muted small">Generates a PDF list of events in a date range — for a whole semester, or any custom range — optionally filtered to one event type. (Anyone can also do this from the calendar's own toolbar — no admin login needed.)</p>
+                      <form id="export-pdf-form">
+                        <div class="row g-2 mb-2">
+                          <div class="col-sm-6">
+                            <label class="form-label" for="export-pdf-start">From *</label>
+                            <input type="date" class="form-control" id="export-pdf-start" required />
+                          </div>
+                          <div class="col-sm-6">
+                            <label class="form-label" for="export-pdf-end">To *</label>
+                            <input type="date" class="form-control" id="export-pdf-end" required />
+                          </div>
+                        </div>
+                        <div class="mb-2">
+                          <label class="form-label" for="export-pdf-type">Event Type</label>
+                          <select class="form-select" id="export-pdf-type">
+                            <option value="">All types</option>
+                            <option value="meeting">Meeting</option>
+                            <option value="social">Social</option>
+                            <option value="academic">Academic</option>
+                            <option value="athletic">Athletic</option>
+                            <option value="fundraiser">Fundraiser</option>
+                            <option value="performance">Performance</option>
+                            <option value="other">Other</option>
+                          </select>
+                        </div>
+                        <div id="export-pdf-msg" class="alert-inline d-none mb-2"></div>
+                        <button type="submit" class="btn-coi-secondary mt-1">
+                          <i class="fa-solid fa-file-pdf me-1"></i>Download PDF
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                </div><!-- /admin-sub-events-export -->
+              </div><!-- /admin-section-events -->
+
+              <!-- ============================= ENTITIES ============================= -->
+              <div id="admin-section-entities" class="admin-section d-none">
+                <ul class="nav nav-pills admin-subnav2 mb-3 px-2" data-subnav-scope="entities">
+                  <li class="nav-item">
+                    <button type="button" class="nav-link active" data-sub-section="entities-create">
+                      <i class="fa-solid fa-plus me-1"></i>Create
+                    </button>
+                  </li>
+                  <li class="nav-item">
+                    <button type="button" class="nav-link" data-sub-section="entities-import">
+                      <i class="fa-solid fa-file-import me-1"></i>Import
+                    </button>
+                  </li>
+                </ul>
+
+                <div id="admin-sub-entities-create" class="admin-subsection row g-3 px-2" data-scope="entities">
+                  <!-- Create Entity -->
+                  <div class="col-12 col-md-6">
+                    <div class="section-card">
+                      <h4><i class="fa-solid fa-plus-circle me-2"></i>Create Entity</h4>
+                      <form id="create-entity-form">
+                        <div class="mb-2">
+                          <label class="form-label" for="ent-name">Entity Name *</label>
+                          <input type="text" class="form-control" id="ent-name" required />
+                        </div>
+                        <div class="mb-2">
+                          <label class="form-label" for="ent-type">Type *</label>
+                          <select class="form-select" id="ent-type" required>
+                            <option value="club">Club</option>
+                            <option value="department">Department</option>
+                            <option value="office">Office</option>
+                            <option value="organization">Organization</option>
+                            <option value="program">Program</option>
+                          </select>
+                        </div>
+                        <!-- Entity logo removed: use Font Awesome icon instead -->
+                        <div class="mb-2">
+                          <label class="form-label" for="ent-pw">Default Password *</label>
+                          <input type="text" class="form-control" id="ent-pw" required minlength="8"
+                                 placeholder="Entity will change this on first login" />
+                        </div>
+                        <div id="create-entity-msg" class="alert-inline d-none mb-2"></div>
+                        <button type="submit" class="btn-coi-secondary mt-1">
+                          <i class="fa-solid fa-plus me-1"></i>Create Entity
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+
+                  <!-- Entities list (admin can delete) -->
+                  <div class="col-12">
+                    <div class="section-card">
+                      <h4><i class="fa-solid fa-list me-2"></i>All Entities</h4>
+                      <div id="admin-entities-list">Loading…</div>
+                    </div>
+                  </div>
+                </div><!-- /admin-sub-entities-create -->
+
+                <div id="admin-sub-entities-import" class="admin-subsection row g-3 d-none px-2" data-scope="entities">
+                  <!-- Bulk Import Entities -->
+                  <div class="col-12">
+                    <div class="section-card">
+                      <h4><i class="fa-solid fa-file-import me-2"></i>Bulk Import Entities</h4>
+                      <p class="text-muted small">Paste one name per line (e.g. from a club list) — each is created with the type below and a random temporary password, same as creating one individually. Names that already exist are skipped, not treated as an error.</p>
+                      <form id="bulk-import-form">
+                        <div class="mb-2">
+                          <label class="form-label" for="bulk-import-type">Type (applies to all)</label>
+                          <select class="form-select" id="bulk-import-type" style="max-width:220px">
+                            <option value="club">Club</option>
+                            <option value="department">Department</option>
+                            <option value="office">Office</option>
+                            <option value="organization">Organization</option>
+                            <option value="program">Program</option>
+                          </select>
+                        </div>
+                        <div class="mb-2">
+                          <label class="form-label" for="bulk-import-names">Names (one per line)</label>
+                          <textarea class="form-control" id="bulk-import-names" rows="6" placeholder="AFRO Club&#10;Alpine Club&#10;Art Club"></textarea>
+                        </div>
+                        <div id="bulk-import-msg" class="alert-inline d-none mb-2"></div>
+                        <button type="submit" class="btn-coi-secondary mt-1">
+                          <i class="fa-solid fa-file-import me-1"></i>Import
+                        </button>
+                      </form>
+                      <div id="bulk-import-results" class="mt-3"></div>
+                    </div>
+                  </div>
+                </div><!-- /admin-sub-entities-import -->
+              </div><!-- /admin-section-entities -->
+
+              <!-- ============================= LOCATIONS ============================= -->
+              <div id="admin-section-locations" class="admin-section d-none">
+                <ul class="nav nav-pills admin-subnav2 mb-3 px-2" data-subnav-scope="locations">
+                  <li class="nav-item">
+                    <button type="button" class="nav-link active" data-sub-section="locations-create">
+                      <i class="fa-solid fa-plus me-1"></i>Create
+                    </button>
+                  </li>
+                  <li class="nav-item">
+                    <button type="button" class="nav-link" data-sub-section="locations-import">
+                      <i class="fa-solid fa-file-import me-1"></i>Import
+                    </button>
+                  </li>
+                </ul>
+
+                <div id="admin-sub-locations-create" class="admin-subsection row g-3 px-2" data-scope="locations">
+                  <!-- Create Location -->
+                  <div class="col-12 col-md-6">
+                    <div class="section-card">
+                      <h4><i class="fa-solid fa-plus-circle me-2"></i>Create Location</h4>
+                      <form id="create-location-form">
+                        <div class="mb-2">
+                          <label class="form-label" for="loc-name">Location Name *</label>
+                          <input type="text" class="form-control" id="loc-name" required />
+                        </div>
+                        <div id="create-location-msg" class="alert-inline d-none mb-2"></div>
+                        <button type="submit" class="btn-coi-secondary mt-1">
+                          <i class="fa-solid fa-plus me-1"></i>Create Location
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+
+                  <!-- Locations list (admin can delete; entity-or-admin can rename, matching who can create one) -->
+                  <div class="col-12">
+                    <div class="section-card">
+                      <h4><i class="fa-solid fa-location-dot me-2"></i>All Locations</h4>
+                      <div id="admin-locations-list">Loading…</div>
+                    </div>
+                  </div>
+                </div><!-- /admin-sub-locations-create -->
+
+                <div id="admin-sub-locations-import" class="admin-subsection row g-3 d-none px-2" data-scope="locations">
+                  <!-- Bulk Import Locations -->
+                  <div class="col-12">
+                    <div class="section-card">
+                      <h4><i class="fa-solid fa-location-dot me-2"></i>Bulk Import Locations</h4>
+                      <p class="text-muted small">Paste one location name per line — added to the shared location list used when creating events. Names that already exist are skipped, not treated as an error.</p>
+                      <form id="bulk-import-locations-form">
+                        <div class="mb-2">
+                          <label class="form-label" for="bulk-import-locations-names">Names (one per line)</label>
+                          <textarea class="form-control" id="bulk-import-locations-names" rows="6" placeholder="Jewett Auditorium&#10;McCain&#10;Boone Hall"></textarea>
+                        </div>
+                        <div id="bulk-import-locations-msg" class="alert-inline d-none mb-2"></div>
+                        <button type="submit" class="btn-coi-secondary mt-1">
+                          <i class="fa-solid fa-file-import me-1"></i>Import
+                        </button>
+                      </form>
+                      <div id="bulk-import-locations-results" class="mt-3"></div>
+                    </div>
+                  </div>
+                </div><!-- /admin-sub-locations-import -->
+              </div><!-- /admin-section-locations -->
+
+              <!-- ============================= UTILITIES ============================= -->
+              <div id="admin-section-utilities" class="admin-section d-none">
+                <div class="row g-3 px-2">
+                  <div class="col-12 col-md-6">
+                    <div class="section-card">
+                      <h4><i class="fa-solid fa-tv me-2"></i>Kiosk View</h4>
+                      <p class="text-muted small">Opens the read-only, auto-scrolling display view (<code>/display.html</code>) meant for a lobby TV or hallway screen, in a new tab.</p>
+                      <a href="/display.html" target="_blank" rel="noopener" class="btn-coi-secondary">
+                        <i class="fa-solid fa-arrow-up-right-from-square me-1"></i>Open Kiosk View
+                      </a>
+                    </div>
+                  </div>
+
+                  <!-- Notifications -->
+                  <div class="col-12 col-md-6">
+                    <div class="section-card">
+                      <h4><i class="fa-solid fa-bell me-2"></i>Notifications</h4>
+                      <p class="text-muted small">Where feedback/bug reports submitted via the public Feedback button get emailed. Leave blank to disable email notifications — submissions are always saved either way, visible under Roadmap.</p>
+                      <form id="admin-settings-form">
+                        <div class="mb-2">
+                          <label class="form-label" for="admin-notify-email">Notify Email</label>
+                          <input type="email" class="form-control" id="admin-notify-email" placeholder="admin@collegeofidaho.edu" />
+                        </div>
+                        <div id="admin-settings-msg" class="alert-inline d-none mb-2"></div>
+                        <button type="submit" class="btn-coi-secondary mt-1">
+                          <i class="fa-solid fa-floppy-disk me-1"></i>Save
+                        </button>
+                      </form>
+                    </div>
                   </div>
                 </div>
-              </div>
-              </div><!-- /admin-section-dashboard -->
+              </div><!-- /admin-section-utilities -->
 
               <div id="admin-section-roadmap" class="admin-section d-none px-2">
-                <!-- Populated by renderAdminRoadmap() in app.js -->
+                <div class="section-card mb-3">
+                  <h4><i class="fa-solid fa-comment-dots me-2"></i>Suggestions &amp; Feedback</h4>
+                  <p class="text-muted small">Submitted via the public Feedback button on every page. Delete an item once you've reviewed or acted on it.</p>
+                  <div id="admin-feedback-list">Loading…</div>
+                </div>
+                <div id="admin-roadmap-phases">
+                  <!-- Populated by renderAdminRoadmap() in app.js -->
+                </div>
               </div>
             </div>
 
@@ -460,6 +766,14 @@
 </div><!-- /app -->
 
 <!-- ================================================================
+     FEEDBACK BUTTON (floating, every page — not tied to calendar/admin state)
+     ================================================================ -->
+<button type="button" id="btn-feedback" class="feedback-fab" title="Send feedback or report a bug">
+  <i class="fa-solid fa-comment-dots"></i>
+  <span class="d-none d-sm-inline">Feedback</span>
+</button>
+
+<!-- ================================================================
      BOTTOM NAV (mobile / tablet)
      ================================================================ -->
 <nav id="bottom-nav" class="d-flex">
@@ -488,6 +802,9 @@
         </div>
         <p id="event-modal-desc" class="mb-3"></p>
         <div class="d-flex flex-wrap gap-2">
+          <a id="event-modal-join-link" href="#" class="btn btn-sm btn-coi-secondary d-none" target="_blank" rel="noopener">
+            <i class="fa-solid fa-video me-1"></i>Join Online
+          </a>
           <a id="event-modal-ics-link" href="#" class="btn btn-sm btn-outline-secondary" download>
             <i class="fa-solid fa-calendar-plus me-1"></i>Add to Calendar
           </a>
@@ -515,6 +832,181 @@
         <input type="text" class="form-control mb-3" id="event-search-input"
                placeholder="Search by event title, description, or entity…" autocomplete="off" />
         <div id="event-search-results"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Export Events PDF Modal (public — anyone can export a date range, no login required) -->
+<div class="modal fade" id="exportPdfModal" tabindex="-1" aria-labelledby="exportPdfModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold" id="exportPdfModalLabel">
+          <i class="fa-solid fa-file-pdf me-2"></i>Export Events PDF
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small">Generates a PDF list of events in a date range — for a whole semester, or any custom range — optionally filtered to one event type.</p>
+        <form id="pub-export-pdf-form">
+          <div class="row g-2 mb-2">
+            <div class="col-sm-6">
+              <label class="form-label" for="pub-export-pdf-start">From *</label>
+              <input type="date" class="form-control" id="pub-export-pdf-start" required />
+            </div>
+            <div class="col-sm-6">
+              <label class="form-label" for="pub-export-pdf-end">To *</label>
+              <input type="date" class="form-control" id="pub-export-pdf-end" required />
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label" for="pub-export-pdf-type">Event Type</label>
+            <select class="form-select" id="pub-export-pdf-type">
+              <option value="">All types</option>
+              <option value="meeting">Meeting</option>
+              <option value="social">Social</option>
+              <option value="academic">Academic</option>
+              <option value="athletic">Athletic</option>
+              <option value="fundraiser">Fundraiser</option>
+              <option value="performance">Performance</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div id="pub-export-pdf-msg" class="alert-inline d-none mb-2"></div>
+          <button type="submit" class="btn-coi-secondary mt-1">
+            <i class="fa-solid fa-file-pdf me-1"></i>Download PDF
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Filter Events Modal (public — narrows the calendar view by type, entity, and location) -->
+<div class="modal fade" id="calFilterModal" tabindex="-1" aria-labelledby="calFilterModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold" id="calFilterModalLabel">
+          <i class="fa-solid fa-filter me-2"></i>Filter Events
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="cal-filter-form">
+          <div class="mb-2">
+            <label class="form-label" for="cal-filter-type">Event Type</label>
+            <select class="form-select" id="cal-filter-type">
+              <option value="">All types</option>
+              <option value="meeting">Meeting</option>
+              <option value="social">Social</option>
+              <option value="academic">Academic</option>
+              <option value="athletic">Athletic</option>
+              <option value="fundraiser">Fundraiser</option>
+              <option value="performance">Performance</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label" for="cal-filter-entity">Entity</label>
+            <select class="form-select" id="cal-filter-entity">
+              <option value="">All entities</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label" for="cal-filter-location">Location</label>
+            <select class="form-select" id="cal-filter-location">
+              <option value="">All locations</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="cal-filter-format">Format</label>
+            <select class="form-select" id="cal-filter-format">
+              <option value="">In-person, virtual, or hybrid</option>
+              <option value="in_person">In-person</option>
+              <option value="virtual">Virtual</option>
+              <option value="hybrid">Hybrid</option>
+            </select>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn-coi-secondary">
+              <i class="fa-solid fa-filter me-1"></i>Apply
+            </button>
+            <button type="button" class="btn btn-outline-secondary" id="cal-filter-clear">
+              Clear Filters
+            </button>
+          </div>
+        </form>
+        <hr class="my-3" />
+        <p class="text-muted small mb-2">Get a live-updating calendar link for the type/entity/location above — subscribe to it in Google Calendar, Apple Calendar, or Outlook and it stays in sync automatically instead of a one-time download.</p>
+        <button type="button" class="btn btn-outline-secondary w-100" id="btn-copy-feed-link">
+          <i class="fa-solid fa-rss me-1"></i>Copy Subscribe Link
+        </button>
+        <div id="cal-feed-msg" class="alert-inline d-none mt-2 mb-0"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Feedback / Bug Report Modal (public — no login required) -->
+<div class="modal fade" id="feedbackModal" tabindex="-1" aria-labelledby="feedbackModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold" id="feedbackModalLabel">
+          <i class="fa-solid fa-comment-dots me-2"></i>Feedback &amp; Bug Reports
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small">Found a bug, or have a suggestion? It goes straight to the College of Idaho admin.</p>
+        <form id="feedback-form">
+          <div class="mb-2">
+            <label class="form-label" for="feedback-category">Type</label>
+            <select class="form-select" id="feedback-category">
+              <option value="suggestion" selected>Suggestion</option>
+              <option value="bug">Bug report</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label" for="feedback-message">Message *</label>
+            <textarea class="form-control" id="feedback-message" rows="4" maxlength="4000" required
+                      placeholder="What happened, or what would you like to see?"></textarea>
+          </div>
+          <div class="mb-2">
+            <label class="form-label" for="feedback-email">Your email (optional)</label>
+            <input type="email" class="form-control" id="feedback-email" placeholder="Only if you'd like a reply" />
+          </div>
+          <div id="feedback-msg" class="alert-inline d-none mb-2"></div>
+          <button type="submit" class="btn-coi-secondary mt-1">
+            <i class="fa-solid fa-paper-plane me-1"></i>Send
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Jump to Date Modal (mini month grid, shaded by event density -- also the mini-calendar heat map) -->
+<div class="modal fade" id="jumpToDateModal" tabindex="-1" aria-labelledby="jumpToDateModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:320px">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold" id="jumpToDateModalLabel">
+          <i class="fa-solid fa-calendar-day me-2"></i>Jump to a Date
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex align-items-center mb-2">
+          <button class="cal-nav-btn" id="jump-cal-prev"><i class="fa-solid fa-chevron-left"></i></button>
+          <span class="mx-auto fw-bold" id="jump-cal-title"></span>
+          <button class="cal-nav-btn" id="jump-cal-next"><i class="fa-solid fa-chevron-right"></i></button>
+        </div>
+        <div id="jump-cal-grid" class="mini-cal-grid"></div>
+        <p class="text-muted small mt-2 mb-0">Darker days have more events. Click a date to jump there.</p>
       </div>
     </div>
   </div>
@@ -589,6 +1081,36 @@
           </div>
           <div id="change-pw-msg" class="alert-inline d-none mb-2"></div>
           <button type="submit" class="btn-coi-primary w-100">Update Password</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SET NEW ADMIN PASSWORD MODAL (opened automatically from a ?reset_token= link emailed by
+     Forgot Password) -->
+<div class="modal fade" id="resetAdminPasswordModal" tabindex="-1" aria-labelledby="resetAdminPasswordModalLabel" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:380px">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold" id="resetAdminPasswordModalLabel">
+          <i class="fa-solid fa-key me-2"></i>Set New Admin Password
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="reset-admin-password-form">
+          <input type="hidden" id="reset-admin-token" />
+          <div class="mb-3">
+            <label class="form-label">New Password</label>
+            <input type="password" class="form-control" id="reset-admin-new-pw" required minlength="8" />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Confirm New Password</label>
+            <input type="password" class="form-control" id="reset-admin-confirm-pw" required />
+          </div>
+          <div id="reset-admin-password-msg" class="alert-inline d-none mb-2"></div>
+          <button type="submit" class="btn-coi-primary w-100">Set New Password</button>
         </form>
       </div>
     </div>
@@ -699,6 +1221,18 @@
       <div class="modal-body">
         <form id="edit-event-form">
           <input type="hidden" id="edit-ev-id" />
+          <input type="hidden" id="edit-ev-series-id" />
+          <div id="edit-ev-apply-to-box" class="mb-3 d-none">
+            <label class="form-label">This event repeats. Apply changes to:</label>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="edit-ev-apply-to" id="edit-ev-apply-this" value="this" checked />
+              <label class="form-check-label" for="edit-ev-apply-this">This event only</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="edit-ev-apply-to" id="edit-ev-apply-future" value="future" />
+              <label class="form-check-label" for="edit-ev-apply-future">This and following events</label>
+            </div>
+          </div>
           <div class="mb-2">
             <label class="form-label" for="edit-ev-title">Event Name *</label>
             <input type="text" class="form-control" id="edit-ev-title" required />
@@ -708,10 +1242,26 @@
             <textarea class="form-control" id="edit-ev-desc" rows="2"></textarea>
           </div>
           <div class="mb-2">
+            <label class="form-label" for="edit-ev-type">Event Type</label>
+            <select class="form-select" id="edit-ev-type">
+              <option value="meeting">Meeting</option>
+              <option value="social">Social</option>
+              <option value="academic">Academic</option>
+              <option value="athletic">Athletic</option>
+              <option value="fundraiser">Fundraiser</option>
+              <option value="performance">Performance</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="mb-2">
             <label class="form-label" for="edit-ev-location">Location</label>
             <select class="form-select" id="edit-ev-location"></select>
             <div class="form-text">Or add a new location below.</div>
             <input type="text" class="form-control mt-2" id="edit-ev-new-location" placeholder="New location name (optional)" />
+          </div>
+          <div class="mb-2">
+            <label class="form-label" for="edit-ev-join-url">Virtual Meeting Link</label>
+            <input type="url" class="form-control" id="edit-ev-join-url" placeholder="https://zoom.us/j/... (optional)" />
           </div>
           <div class="row g-2">
             <div class="col-6">
@@ -733,9 +1283,38 @@
   </div>
 </div>
 
+<!-- DELETE RECURRING EVENT MODAL (only shown when the event being deleted is part of a series) -->
+<div class="modal fade" id="deleteSeriesModal" tabindex="-1" aria-labelledby="deleteSeriesModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:380px">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold" id="deleteSeriesModalLabel">Delete Recurring Event</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small">This event is part of a recurring series.</p>
+        <div class="d-flex flex-column gap-2">
+          <button type="button" class="btn btn-outline-danger" id="btn-delete-this-only">
+            Delete This Event Only
+          </button>
+          <button type="button" class="btn btn-danger" id="btn-delete-this-and-future">
+            Delete This and Following Events
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Bootstrap 5 JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
         integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+<!-- jsPDF + autotable plugin, for the admin "Export Events PDF" feature. Load order matters:
+     autotable extends jsPDF's prototype, so it must load after jspdf itself. -->
+<script src="https://cdn.jsdelivr.net/npm/jspdf@4.2.1/dist/jspdf.umd.min.js"
+        integrity="sha384-qovJwSBbRDPP5cEjCp8S0UP66wrvnjaa60XMOGzTNanrThcrGfXfnZkvgY8N1KT3" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@5.0.8/dist/jspdf.plugin.autotable.min.js"
+        integrity="sha384-5jk55M0XWoAw7LyhlXJe19ErOr3doBAPzxw9vahPFbvolqWa2yDk4fhHa2zuYeOa" crossorigin="anonymous"></script>
 <!-- App JS -->
 <script src="/js/app.js"></script>
 </body>

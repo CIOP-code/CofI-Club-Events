@@ -2,6 +2,17 @@
 
 Notable changes to Campus Events, newest first. Each entry links the PR that shipped it.
 
+## 2026-08-12
+
+- **Event types + PDF export for everyone** ([#15](https://github.com/CIOP-code/CofI-Club-Events/pull/15)) — Events now have a single `event_type` (Meeting/Social/Academic/Athletic/Fundraiser/Performance/Other), filterable via the API. A PDF export button is now on the public calendar toolbar too (previously admin-only), sharing the same date-range/type filters.
+- **Admin panel reorganized into tabs** — the Dashboard's eight stacked cards became top-level tabs (Events/Entities/Locations/Utilities/Roadmap) with Create/Import/Export sub-tabs. New: Bulk Import Events (pipe-delimited paste), Create Location (previously only reachable indirectly), and a Kiosk View link under Utilities. Fixed a bug where `ensureLocation()` failed instead of resolving to an existing location's id on a 409, breaking bulk imports and the "new location" field whenever the location already existed.
+- **Public feedback/bug-report tool** — a floating Feedback button on every page (no login required) stores submissions, reviewed under Admin → Roadmap → Suggestions & Feedback, and emails a configurable recovery address (Admin → Utilities → Notifications) via Resend. Rate-limited like the login endpoints, since it's the app's only public unauthenticated write endpoint.
+- **Self-service admin password reset** — a "Forgot password?" link on the admin login page emails a one-time reset link (30-minute expiry, single-use, stored only as a hash), reusing the same notify-email/Resend setup as feedback. Solves the "what if the admin leaves" continuity problem, as long as the recovery address is institutional rather than personal.
+- **Calendar filtering + Jump to a Date** — a filter button narrows the calendar by type/entity/location/format, persisting through navigation and clearing itself after 20 minutes idle or on leaving the calendar page. A combined "Jump to a Date" widget replaces the separate mini-calendar-heatmap/jump-to-day roadmap ideas: a month grid shaded by event density that jumps to whichever day you click.
+- **Subscribable filtered feed** — `GET /api/feed.ics` returns a live-updating VCALENDAR honoring the same filters as the calendar; a "Copy Subscribe Link" button builds the URL to paste into Google/Apple/Outlook.
+- **Virtual/hybrid events** — an optional meeting-link field; "Virtual"/"Hybrid" is derived from that link plus whether a location is set, shown as a small icon on calendar tiles and a "Join Online" button on the event detail modal.
+- **Recurring events** — weekly/monthly series (capped at 52 occurrences, required end date) with a "this event only" vs "this and following" choice on edit/delete. Materialized as real rows sharing a series id, so every other feature (search, the feed, PDF export) works with them unchanged.
+
 ## 2026-08-10
 
 - **Security hardening pass + SECURITY.md** ([#14](https://github.com/CIOP-code/CofI-Club-Events/pull/14)) — Removed a hardcoded fallback for `JWT_SECRET`/`ADMIN_PASSWORD` that would silently activate (accepting forged admin tokens / the default password) if those secrets weren't configured. Added D1-backed rate limiting on both login endpoints, stopped leaking raw exception messages in API errors, added security response headers (CSP, HSTS, etc.) via `public/_headers`, pinned Bootstrap/Font Awesome CDN assets with Subresource Integrity, and raised the minimum password length to 8 characters. New `SECURITY.md` documents the app's full security posture for IT review.

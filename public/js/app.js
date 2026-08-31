@@ -19,6 +19,9 @@ const state = {
   adminEventsView: 'week',            // 'week' | 'month' — browsable range for the admin Events list
   adminEventsAnchorDate: new Date(),  // reference date for that range, so past events are reachable too
   entitiesView: 'list',               // 'grid' | 'list' — icon tiles vs. compact rows on the Entities page
+  calFilters: { event_type: '', entity_id: '', location_id: '', format: '' }, // calendar view filters
+  calFilterTimeoutId: null,   // handle for the auto-clear timer armed while a filter is active
+  jumpCalAnchor: new Date(),  // which month the Jump-to-Date mini-calendar is showing
 };
 
 /* Ensure CSS variable for calendar header height matches the rendered size.
@@ -36,6 +39,15 @@ window.addEventListener('resize', debounce(() => setTimeout(syncCalendarHeaderHe
    NAVIGATION
    ============================================================= */
 function navigate(page) {
+  // Leaving the calendar behind is the easiest way to forget a filter is on -- come back later
+  // and events are missing for no visible reason. Clearing it here means the calendar always
+  // starts unfiltered on a fresh visit, same as if you'd never touched it.
+  if (state.currentPage === 'home' && page !== 'home' && calFiltersActive()) {
+    state.calFilters = { event_type: '', entity_id: '', location_id: '', format: '' };
+    disarmCalFilterTimeout();
+    updateCalFilterIndicator();
+  }
+
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById(`page-${page}`).classList.add('active');
 
@@ -85,6 +97,19 @@ function startOfDay(d) {
 function addDays(d, n) {
   const r = new Date(d);
   r.setDate(r.getDate() + n);
+  return r;
+}
+
+function addMonths(d, n) {
+  // Pin to the 1st before shifting months, then clamp back to the target month's real last day --
+  // otherwise e.g. May 31 minus one month overflows (no "April 31") into May 1st via JS Date's
+  // own rollover, silently landing back in the wrong month instead of late April.
+  const r = new Date(d);
+  const day = r.getDate();
+  r.setDate(1);
+  r.setMonth(r.getMonth() + n);
+  const lastDayOfTargetMonth = new Date(r.getFullYear(), r.getMonth() + 1, 0).getDate();
+  r.setDate(Math.min(day, lastDayOfTargetMonth));
   return r;
 }
 
@@ -257,6 +282,16 @@ const TYPE_LABELS = {
   program: 'Program',
 };
 
+const EVENT_TYPE_LABELS = {
+  meeting: 'Meeting',
+  social: 'Social',
+  academic: 'Academic',
+  athletic: 'Athletic',
+  fundraiser: 'Fundraiser',
+  performance: 'Performance',
+  other: 'Other',
+};
+
 /** Show an inline alert */
 function showAlert(elId, msg, type = 'danger') {
   const el = document.getElementById(elId);
@@ -296,14 +331,23 @@ async function fetchLocations() {
   return ok ? (data.locations || []) : [];
 }
 
+// Get-or-create by name: despite the POST endpoint rejecting a duplicate name with a 409 (the
+// right behavior for the deliberate Create Location form, where a duplicate is a mistake worth
+// flagging), callers of this helper are asking for a location's id, not necessarily to create a
+// new row -- a 409 here means "someone already made this one," which should resolve the same as
+// if it never conflicted, not fail the event they were trying to save.
 async function ensureLocation(newName) {
   const token = state.loggedInEntity?.token || state.adminToken;
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch('/api/locations', { method: 'POST', headers, body: JSON.stringify({ name: newName }) });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Failed to create location');
-  return data.id;
+  if (res.ok) return data.id;
+  if (res.status === 409) {
+    const existing = (await fetchLocations()).find(l => l.name.toLowerCase() === newName.trim().toLowerCase());
+    if (existing) return existing.id;
+  }
+  throw new Error(data.error || 'Failed to create location');
 }
 
 /* =============================================================
@@ -316,8 +360,23 @@ const MONTHS = ['January','February','March','April','May','June',
                 'July','August','September','October','November','December'];
 
 async function fetchEvents(startISO, endISO) {
-  const { ok, data } = await apiFetch(`/api/events?start=${startISO}&end=${endISO}`);
+  let url = `/api/events?start=${startISO}&end=${endISO}`;
+  const { event_type, entity_id, location_id, format } = state.calFilters;
+  if (event_type) url += `&event_type=${encodeURIComponent(event_type)}`;
+  if (entity_id) url += `&entity_id=${encodeURIComponent(entity_id)}`;
+  if (location_id) url += `&location_id=${encodeURIComponent(location_id)}`;
+  if (format) url += `&format=${encodeURIComponent(format)}`;
+  const { ok, data } = await apiFetch(url);
   return ok ? data.events || [] : [];
+}
+
+function activeCalFilterCount() {
+  const { event_type, entity_id, location_id, format } = state.calFilters;
+  return [event_type, entity_id, location_id, format].filter(Boolean).length;
+}
+
+function calFiltersActive() {
+  return activeCalFilterCount() > 0;
 }
 
 function isoLocal(d) {
@@ -454,7 +513,7 @@ async function renderCalendar() {
           style="top:${topPx}px;height:${heightPx}px;left:calc(${leftPct}% + 2px);width:calc(${widthPct}% - 4px);background:${color};color:#fff"
           data-ev-id="${ev.id}"
           title="${escHtml(ev.title)} · ${escHtml(timeStr)}">
-        <div class="ev-title">${escHtml(ev.title)}</div>
+        <div class="ev-title">${eventRecurringIcon(ev)}${eventFormatIcon(ev)}${escHtml(ev.title)}</div>
         <div class="ev-location">${escHtml(ev.location_name || '')}</div>
         <div class="ev-entity">${escHtml(ev.entity_name || '')}</div>
         ${ev.description ? `<div class="ev-desc">${escHtml(truncateText(ev.description, 120))}</div>` : ''}
@@ -628,6 +687,75 @@ async function renderMonthGrid(grid) {
   });
 }
 
+/* =============================================================
+   JUMP TO DATE (mini-calendar heat map -- also doubles as the "spot busy days" widget)
+   ============================================================= */
+async function renderJumpToDateGrid() {
+  const monthStart = new Date(state.jumpCalAnchor.getFullYear(), state.jumpCalAnchor.getMonth(), 1);
+  const monthEnd   = new Date(state.jumpCalAnchor.getFullYear(), state.jumpCalAnchor.getMonth() + 1, 0);
+  const gridStart  = getWeekStart(monthStart);
+  const gridEnd    = addDays(getWeekStart(monthEnd), 6);
+  const totalDays  = Math.round((gridEnd - gridStart) / 86400000) + 1;
+  const cells = Array.from({ length: totalDays }, (_, i) => addDays(gridStart, i));
+
+  document.getElementById('jump-cal-title').textContent = fmt(monthStart, { month: 'long', year: 'numeric' });
+
+  const events = await fetchEvents(isoLocal(gridStart), isoLocal(addDays(gridEnd, 1)));
+  const today = startOfDay(new Date());
+
+  const countByDay = new Map();
+  events.forEach(ev => {
+    const key = startOfDay(new Date(ev.start_datetime)).getTime();
+    countByDay.set(key, (countByDay.get(key) || 0) + 1);
+  });
+  const maxCount = Math.max(0, ...countByDay.values());
+
+  // Shade relative to the busiest day actually in view, not a fixed scale -- a quiet month should
+  // still show its busiest days as "darker", not read as uniformly empty.
+  function heatLevel(count) {
+    if (!count || !maxCount) return 0;
+    return Math.max(1, Math.ceil((count / maxCount) * 4));
+  }
+
+  let html = '';
+  DAYS_SHORT.forEach(d => { html += `<div class="mini-cal-dow">${d[0]}</div>`; });
+  cells.forEach(day => {
+    const inMonth = day.getMonth() === monthStart.getMonth();
+    const isToday = day.getTime() === today.getTime();
+    const count = countByDay.get(day.getTime()) || 0;
+    const level = heatLevel(count);
+    const title = count ? `${count} event${count === 1 ? '' : 's'}` : 'No events';
+    html += `<div class="mini-cal-cell${inMonth ? '' : ' dim'}${isToday ? ' today' : ''}${level ? ` heat-${level}` : ''}" data-date="${day.toISOString()}" title="${escHtml(title)}">${day.getDate()}</div>`;
+  });
+
+  document.getElementById('jump-cal-grid').innerHTML = html;
+
+  document.querySelectorAll('#jump-cal-grid .mini-cal-cell').forEach(cell => {
+    cell.addEventListener('click', () => {
+      state.calAnchorDate = new Date(cell.dataset.date);
+      state.calView = 'day';
+      bootstrap.Modal.getInstance(document.getElementById('jumpToDateModal'))?.hide();
+      if (state.currentPage === 'home') renderCalendar();
+    });
+  });
+}
+
+document.getElementById('btn-jump-to-date').addEventListener('click', () => {
+  state.jumpCalAnchor = new Date(state.calAnchorDate);
+  new bootstrap.Modal(document.getElementById('jumpToDateModal')).show();
+  renderJumpToDateGrid();
+});
+
+document.getElementById('jump-cal-prev').addEventListener('click', () => {
+  state.jumpCalAnchor = new Date(state.jumpCalAnchor.getFullYear(), state.jumpCalAnchor.getMonth() - 1, 1);
+  renderJumpToDateGrid();
+});
+
+document.getElementById('jump-cal-next').addEventListener('click', () => {
+  state.jumpCalAnchor = new Date(state.jumpCalAnchor.getFullYear(), state.jumpCalAnchor.getMonth() + 1, 1);
+  renderJumpToDateGrid();
+});
+
 function escHtml(str) {
   return String(str || '')
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
@@ -640,6 +768,20 @@ function escHtml(str) {
 function truncateText(str, max) {
   const s = String(str || '');
   return s.length > max ? s.slice(0, max).trimEnd() + '…' : s;
+}
+
+// "Virtual"/"Hybrid" isn't a stored field -- derived the same way the backend's format filter
+// derives it (functions/api/events.js): a join_url with no location is Virtual, a join_url with
+// a location is Hybrid, no join_url is in-person and gets no icon at all.
+function eventFormatIcon(ev) {
+  if (!ev.join_url) return '';
+  const isHybrid = !!ev.location_id;
+  return `<i class="fa-solid ${isHybrid ? 'fa-satellite-dish' : 'fa-video'} ev-format-icon" title="${isHybrid ? 'Hybrid' : 'Virtual'}"></i> `;
+}
+
+function eventRecurringIcon(ev) {
+  if (!ev.series_id) return '';
+  return `<i class="fa-solid fa-repeat ev-format-icon" title="Repeats"></i> `;
 }
 
 // Lists the events collapsed into an overflow tile; clicking one opens the normal event modal.
@@ -685,12 +827,18 @@ function renderEventModal(ev) {
   document.getElementById('eventModalLabel').textContent = ev.title;
   document.getElementById('event-modal-title').textContent = ev.title;
   document.getElementById('event-modal-entity-badge').textContent = ev.entity_name || '';
+  const formatSuffix = ev.location_name
+    ? ` · ${ev.location_name}${ev.join_url ? ' (Hybrid)' : ''}`
+    : (ev.join_url ? ' · Virtual' : '');
   document.getElementById('event-modal-time').textContent =
     `${fmt(start,{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})} – ${fmt(end,{hour:'numeric',minute:'2-digit'})}` +
-    (ev.location_name ? ` · ${ev.location_name}` : '');
+    formatSuffix;
   document.getElementById('event-modal-desc').textContent = ev.description || 'No description provided.';
   document.getElementById('event-modal-poster').classList.add('d-none');
   document.getElementById('event-modal-ics-link').href = `/api/events/${ev.id}/ics`;
+  const joinLink = document.getElementById('event-modal-join-link');
+  joinLink.classList.toggle('d-none', !ev.join_url);
+  if (ev.join_url) joinLink.href = ev.join_url;
   hideAlert('event-modal-copied-msg');
   modalEl.dataset.eventId = ev.id;
 }
@@ -803,7 +951,16 @@ window.addEventListener('resize', debounce(() => {
 
 function debounce(fn, ms) {
   let t;
-  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+  // A regular function, not an arrow: addEventListener calls the listener with `this` bound to
+  // the element it's attached to, and that only happens for a non-arrow function. The inner
+  // setTimeout arrow closes over that `this` so it reaches `fn` unchanged -- event-search-input's
+  // handler relies on `this.value` inside the debounced callback, which silently broke (arrow
+  // functions ignore the caller-supplied `this` entirely, so it fell through to undefined) when
+  // this returned an arrow function instead.
+  return function (...args) {
+    clearTimeout(t);
+    t = setTimeout(() => fn.apply(this, args), ms);
+  };
 }
 
 /* =============================================================
@@ -1080,6 +1237,47 @@ document.getElementById('change-pw-form').addEventListener('submit', async funct
   }, 1500);
 });
 
+// Wires the "Repeats" checkbox + frequency/interval/until fields shared by both create-event
+// forms (entity and admin) -- shows/hides the options block and keeps the "week(s)"/"month(s)"
+// unit label matching whatever frequency is selected. Returns a function that reads the current
+// form state into a `recurrence` object for the submit handler to include, or null if unchecked.
+function wireRepeatUi(prefix) {
+  const checkbox = document.getElementById(`${prefix}-repeats`);
+  const options = document.getElementById(`${prefix}-repeat-options`);
+  const freqSel = document.getElementById(`${prefix}-repeat-freq`);
+  const unitLabel = document.getElementById(`${prefix}-repeat-interval-unit`);
+  const intervalInput = document.getElementById(`${prefix}-repeat-interval`);
+  const untilInput = document.getElementById(`${prefix}-repeat-until`);
+
+  checkbox.addEventListener('change', () => {
+    options.classList.toggle('d-none', !checkbox.checked);
+  });
+  freqSel.addEventListener('change', () => {
+    unitLabel.textContent = freqSel.value === 'monthly' ? 'month(s)' : 'week(s)';
+  });
+
+  return function readRecurrence() {
+    if (!checkbox.checked) return null;
+    return {
+      freq: freqSel.value,
+      interval: parseInt(intervalInput.value, 10) || 1,
+      until: untilInput.value,
+    };
+  };
+}
+
+function resetRepeatUi(prefix) {
+  document.getElementById(`${prefix}-repeats`).checked = false;
+  document.getElementById(`${prefix}-repeat-options`).classList.add('d-none');
+  document.getElementById(`${prefix}-repeat-freq`).value = 'weekly';
+  document.getElementById(`${prefix}-repeat-interval`).value = '1';
+  document.getElementById(`${prefix}-repeat-interval-unit`).textContent = 'week(s)';
+  document.getElementById(`${prefix}-repeat-until`).value = '';
+}
+
+const getEvRecurrence = wireRepeatUi('ev');
+const getAdmEvRecurrence = wireRepeatUi('adm-ev');
+
 // Create event (entity user)
 document.getElementById('create-event-form').addEventListener('submit', async function (e) {
   e.preventDefault();
@@ -1107,7 +1305,9 @@ document.getElementById('create-event-form').addEventListener('submit', async fu
   const payload = {
     title:          document.getElementById('ev-title').value.trim(),
     description:    document.getElementById('ev-desc').value.trim(),
+    event_type:     document.getElementById('ev-type').value,
     location_id,
+    join_url:       document.getElementById('ev-join-url').value.trim(),
     start_datetime: document.getElementById('ev-start').value,
     end_datetime:   document.getElementById('ev-end').value,
   };
@@ -1116,6 +1316,16 @@ document.getElementById('create-event-form').addEventListener('submit', async fu
     showAlert('create-event-msg', 'End time must be after start time');
     btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-plus me-1"></i>Create Event';
     return;
+  }
+
+  const recurrence = getEvRecurrence();
+  if (recurrence) {
+    if (!recurrence.until) {
+      showAlert('create-event-msg', 'Pick a "Repeat Until" date');
+      btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-plus me-1"></i>Create Event';
+      return;
+    }
+    payload.recurrence = recurrence;
   }
 
   const { ok, data } = await apiFetch('/api/events', {
@@ -1128,8 +1338,9 @@ document.getElementById('create-event-form').addEventListener('submit', async fu
 
   if (!ok) { showAlert('create-event-msg', data.error || 'Failed to create event'); return; }
 
-  showAlert('create-event-msg', 'Event created successfully!', 'success');
+  showAlert('create-event-msg', data.count ? `${data.count} events created!` : 'Event created successfully!', 'success');
   this.reset();
+  resetRepeatUi('ev');
 });
 
 /* =============================================================
@@ -1175,6 +1386,53 @@ document.getElementById('btn-admin-logout').addEventListener('click', () => {
   document.getElementById('admin-panel').classList.add('d-none');
   document.getElementById('admin-login').classList.remove('d-none');
   document.getElementById('admin-pw').value = '';
+});
+
+/* =============================================================
+   ADMIN PASSWORD RECOVERY (self-service, for succession -- no login required to trigger)
+   ============================================================= */
+document.getElementById('btn-admin-forgot-password').addEventListener('click', () => {
+  document.getElementById('admin-forgot-password-box').classList.toggle('d-none');
+});
+
+document.getElementById('btn-send-reset-link').addEventListener('click', async function () {
+  hideAlert('admin-forgot-password-msg');
+  this.disabled = true;
+  this.innerHTML = '<span class="spinner-sm"></span> Sending…';
+
+  const { ok, data } = await apiFetch('/api/auth/admin/forgot-password', { method: 'POST' });
+
+  this.disabled = false;
+  this.innerHTML = '<i class="fa-solid fa-paper-plane me-1"></i>Send Reset Link';
+
+  showAlert('admin-forgot-password-msg', ok ? data.message : (data.error || 'Failed to send reset link'), ok ? 'success' : 'danger');
+});
+
+document.getElementById('reset-admin-password-form').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideAlert('reset-admin-password-msg');
+
+  const newPw = document.getElementById('reset-admin-new-pw').value;
+  const confirmPw = document.getElementById('reset-admin-confirm-pw').value;
+  if (newPw !== confirmPw) { showAlert('reset-admin-password-msg', 'Passwords do not match'); return; }
+
+  const btn = this.querySelector('button[type=submit]');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-sm"></span> Updating…';
+
+  const { ok, data } = await apiFetch('/api/auth/admin/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ token: document.getElementById('reset-admin-token').value, new_password: newPw }),
+  });
+
+  btn.disabled = false;
+  btn.textContent = 'Set New Password';
+
+  if (!ok) { showAlert('reset-admin-password-msg', data.error || 'Failed to reset password'); return; }
+
+  showAlert('reset-admin-password-msg', 'Password updated! You can log in now.', 'success');
+  this.reset();
+  setTimeout(() => bootstrap.Modal.getInstance(document.getElementById('resetAdminPasswordModal'))?.hide(), 1500);
 });
 
 async function loadAdminData() {
@@ -1477,6 +1735,28 @@ document.getElementById('bulk-import-form').addEventListener('submit', async fun
   loadAdminData();
 });
 
+// Create a single location (admin). Unlike ensureLocation() (used inline from the event forms,
+// which silently reuses an existing name), this is a deliberate create action, so a 409 is
+// reported as an error rather than treated as success.
+document.getElementById('create-location-form').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideAlert('create-location-msg');
+  const btn = this.querySelector('button[type=submit]');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span>';
+
+  const { ok, data } = await apiFetch('/api/locations', {
+    method: 'POST',
+    body: JSON.stringify({ name: document.getElementById('loc-name').value.trim() }),
+  });
+
+  btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-plus me-1"></i>Create Location';
+
+  if (!ok) { showAlert('create-location-msg', data.error || 'Failed to create location'); return; }
+  showAlert('create-location-msg', 'Location created!', 'success');
+  this.reset();
+  loadAdminData();
+});
+
 // Bulk import locations (admin). Same pattern as bulk-importing entities: runs through the
 // existing POST /api/locations one name at a time from the admin's own authenticated session,
 // treating "already exists" (409) as a skip rather than a failure.
@@ -1535,6 +1815,205 @@ document.getElementById('bulk-import-locations-form').addEventListener('submit',
   loadAdminData();
 });
 
+// Bulk import events (admin). Each line is "Entity | Title | Start | End | Location | Type |
+// Description", pipe-delimited rather than comma-delimited since titles/descriptions routinely
+// contain commas. Entities are resolved by name (must already exist -- create it first, same as
+// the single Create Event form requires picking one from the dropdown); locations are created
+// automatically if new, matching ensureLocation()'s behavior elsewhere. One POST /api/events per
+// row, same validation as creating one by hand, so this can't drift from those rules.
+function normalizeBulkDatetime(raw) {
+  const s = (raw || '').trim().replace(' ', 'T');
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(s) ? s : null;
+}
+
+document.getElementById('bulk-import-events-form').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideAlert('bulk-import-events-msg');
+  const btn = this.querySelector('button[type=submit]');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span> Importing…';
+  document.getElementById('bulk-import-events-results').innerHTML = '';
+
+  const lines = document.getElementById('bulk-import-events-rows').value
+    .split('\n')
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  if (!lines.length) {
+    showAlert('bulk-import-events-msg', 'Enter at least one row');
+    btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-file-import me-1"></i>Import';
+    return;
+  }
+
+  const { ok: entOk, data: entData } = await apiFetch('/api/entities');
+  const entitiesByName = new Map((entOk ? entData.entities || [] : []).map(en => [en.name.toLowerCase(), en]));
+
+  const results = [];
+  for (const line of lines) {
+    const [entityName, title, startRaw, endRaw, locationName, typeRaw, description] =
+      line.split('|').map(s => s.trim());
+
+    if (!entityName || !title || !startRaw || !endRaw) {
+      results.push({ line, status: 'failed: entity, title, start, and end are required' });
+      continue;
+    }
+
+    const entity = entitiesByName.get(entityName.toLowerCase());
+    if (!entity) {
+      results.push({ line, status: `failed: unknown entity "${entityName}"` });
+      continue;
+    }
+
+    const start_datetime = normalizeBulkDatetime(startRaw);
+    const end_datetime = normalizeBulkDatetime(endRaw);
+    if (!start_datetime || !end_datetime) {
+      results.push({ line, status: 'failed: start/end must be YYYY-MM-DD HH:MM' });
+      continue;
+    }
+    if (!isValidEventRange(start_datetime, end_datetime)) {
+      results.push({ line, status: 'failed: end must be after start' });
+      continue;
+    }
+
+    const event_type = typeRaw ? typeRaw.toLowerCase() : 'other';
+    if (!EVENT_TYPE_LABELS[event_type]) {
+      results.push({ line, status: `failed: unknown event type "${typeRaw}"` });
+      continue;
+    }
+
+    let location_id = null;
+    if (locationName) {
+      try {
+        location_id = await ensureLocation(locationName);
+      } catch (err) {
+        results.push({ line, status: `failed: ${err.message}` });
+        continue;
+      }
+    }
+
+    const { ok, data } = await apiFetch('/api/events', {
+      method: 'POST',
+      body: JSON.stringify({
+        entity_id: entity.id,
+        title,
+        description: description || '',
+        location_id,
+        start_datetime,
+        end_datetime,
+        event_type,
+      }),
+    });
+    results.push({ line, status: ok ? `created: ${title}` : `failed: ${data.error || 'unknown error'}` });
+  }
+
+  btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-file-import me-1"></i>Import';
+
+  const created = results.filter(r => r.status.startsWith('created')).length;
+  const failed = results.length - created;
+  showAlert('bulk-import-events-msg', `${created} created, ${failed} failed.`, failed ? 'danger' : 'success');
+
+  document.getElementById('bulk-import-events-results').innerHTML = `
+    <div class="table-responsive">
+      <table class="table table-sm">
+        <thead><tr><th>Row</th><th>Result</th></tr></thead>
+        <tbody>
+          ${results.map(r => `<tr><td><code>${escHtml(r.line)}</code></td><td>${escHtml(r.status)}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  this.reset();
+  loadAdminData();
+  loadAdminEvents();
+});
+
+// Export a PDF list of events in a date range, optionally filtered to one type -- e.g. a
+// semester's worth of events for a print handout, using jsPDF + its autotable plugin (loaded via
+// <script> tags in index.html/404.html, before app.js).
+document.getElementById('export-pdf-form').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideAlert('export-pdf-msg');
+  const btn = this.querySelector('button[type=submit]');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span> Generating…';
+
+  const startDate = document.getElementById('export-pdf-start').value; // "YYYY-MM-DD"
+  const endDate = document.getElementById('export-pdf-end').value;
+  const eventType = document.getElementById('export-pdf-type').value;
+
+  let url = `/api/events?start=${startDate}T00:00:00&end=${endDate}T23:59:59`;
+  if (eventType) url += `&event_type=${eventType}`;
+
+  const { ok, data } = await apiFetch(url);
+  btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-file-pdf me-1"></i>Download PDF';
+
+  if (!ok) { showAlert('export-pdf-msg', data.error || 'Failed to load events'); return; }
+  const events = data.events || [];
+  if (!events.length) { showAlert('export-pdf-msg', 'No events found in that range'); return; }
+
+  generateEventsPdf(events, { startDate, endDate, eventType });
+});
+
+// Same export, available to everyone (no login required) via a toolbar button on the calendar.
+document.getElementById('btn-export-pdf').addEventListener('click', () => {
+  hideAlert('pub-export-pdf-msg');
+  document.getElementById('pub-export-pdf-form').reset();
+  new bootstrap.Modal(document.getElementById('exportPdfModal')).show();
+});
+
+document.getElementById('pub-export-pdf-form').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideAlert('pub-export-pdf-msg');
+  const btn = this.querySelector('button[type=submit]');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span> Generating…';
+
+  const startDate = document.getElementById('pub-export-pdf-start').value; // "YYYY-MM-DD"
+  const endDate = document.getElementById('pub-export-pdf-end').value;
+  const eventType = document.getElementById('pub-export-pdf-type').value;
+
+  let url = `/api/events?start=${startDate}T00:00:00&end=${endDate}T23:59:59`;
+  if (eventType) url += `&event_type=${eventType}`;
+
+  const { ok, data } = await apiFetch(url);
+  btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-file-pdf me-1"></i>Download PDF';
+
+  if (!ok) { showAlert('pub-export-pdf-msg', data.error || 'Failed to load events'); return; }
+  const events = data.events || [];
+  if (!events.length) { showAlert('pub-export-pdf-msg', 'No events found in that range'); return; }
+
+  generateEventsPdf(events, { startDate, endDate, eventType });
+  bootstrap.Modal.getInstance(document.getElementById('exportPdfModal'))?.hide();
+});
+
+function generateEventsPdf(events, { startDate, endDate, eventType }) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+
+  doc.setFontSize(16);
+  doc.text('Campus Events — College of Idaho', 14, 18);
+  doc.setFontSize(10);
+  doc.setTextColor(100);
+  const rangeLabel = `${startDate} to ${endDate}` + (eventType ? ` · ${EVENT_TYPE_LABELS[eventType] || eventType}` : ' · All types');
+  doc.text(rangeLabel, 14, 25);
+
+  const rows = events.map(ev => [
+    new Date(ev.start_datetime).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }),
+    ev.title,
+    ev.entity_name || '',
+    EVENT_TYPE_LABELS[ev.event_type] || ev.event_type || '',
+    ev.location_name || '',
+  ]);
+
+  doc.autoTable({
+    startY: 30,
+    head: [['Date/Time', 'Title', 'Entity', 'Type', 'Location']],
+    body: rows,
+    styles: { fontSize: 9 },
+    headStyles: { fillColor: [83, 56, 96] }, // --coi-blue
+  });
+
+  doc.save(`campus-events-${startDate}-to-${endDate}.pdf`);
+}
+
 // Create event (admin)
 document.getElementById('admin-create-event-form').addEventListener('submit', async function (e) {
   e.preventDefault();
@@ -1565,23 +2044,34 @@ document.getElementById('admin-create-event-form').addEventListener('submit', as
     return;
   }
 
+  const admRecurrence = getAdmEvRecurrence();
+  if (admRecurrence && !admRecurrence.until) {
+    showAlert('adm-create-event-msg', 'Pick a "Repeat Until" date');
+    btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-plus me-1"></i>Create Event';
+    return;
+  }
+
   const { ok, data } = await apiFetch('/api/events', {
     method: 'POST',
     body: JSON.stringify({
       entity_id:      parseInt(document.getElementById('adm-ev-entity').value),
       title:          document.getElementById('adm-ev-title').value.trim(),
       description:    document.getElementById('adm-ev-desc').value.trim(),
+      event_type:     document.getElementById('adm-ev-type').value,
       location_id,
+      join_url:       document.getElementById('adm-ev-join-url').value.trim(),
       start_datetime: adm_start,
       end_datetime:   adm_end,
+      ...(admRecurrence ? { recurrence: admRecurrence } : {}),
     }),
   });
 
   btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-plus me-1"></i>Create Event';
 
   if (!ok) { showAlert('adm-create-event-msg', data.error || 'Failed to create event'); return; }
-  showAlert('adm-create-event-msg', 'Event created!', 'success');
+  showAlert('adm-create-event-msg', data.count ? `${data.count} events created!` : 'Event created!', 'success');
   this.reset();
+  resetRepeatUi('adm-ev');
   loadAdminEvents();
 });
 
@@ -1699,11 +2189,40 @@ function refreshEventLists() {
 // Delete event (shared by the admin Events list and an entity's own My Events list -- the API
 // already permits either an admin or the owning entity)
 async function deleteEventById(id) {
+  // Need to know if this is part of a series before deciding which confirmation to show, so
+  // this always fetches the event first rather than trusting a caller to have it on hand.
+  const { ok: getOk, data: getData } = await apiFetch(`/api/events/${id}`);
+  const ev = getOk ? getData.event : null;
+
+  if (ev?.series_id) {
+    const modalEl = document.getElementById('deleteSeriesModal');
+    modalEl.dataset.eventId = id;
+    new bootstrap.Modal(modalEl).show();
+    return;
+  }
+
   if (!confirm('Delete this event?')) return;
   const { ok, data } = await apiFetch(`/api/events/${id}`, { method: 'DELETE' });
   if (!ok) { alert(data.error || 'Failed to delete event'); return; }
   refreshEventLists();
 }
+
+document.getElementById('btn-delete-this-only').addEventListener('click', async () => {
+  const id = document.getElementById('deleteSeriesModal').dataset.eventId;
+  bootstrap.Modal.getInstance(document.getElementById('deleteSeriesModal'))?.hide();
+  const { ok, data } = await apiFetch(`/api/events/${id}`, { method: 'DELETE' });
+  if (!ok) { alert(data.error || 'Failed to delete event'); return; }
+  refreshEventLists();
+});
+
+document.getElementById('btn-delete-this-and-future').addEventListener('click', async () => {
+  const id = document.getElementById('deleteSeriesModal').dataset.eventId;
+  if (!confirm('Delete this and every following event in the series? This cannot be undone.')) return;
+  bootstrap.Modal.getInstance(document.getElementById('deleteSeriesModal'))?.hide();
+  const { ok, data } = await apiFetch(`/api/events/${id}?apply_to=future`, { method: 'DELETE' });
+  if (!ok) { alert(data.error || 'Failed to delete events'); return; }
+  refreshEventLists();
+});
 
 // Edit event (title / description / location / start / end – entity can't be changed)
 async function openEditEventModal(id) {
@@ -1713,11 +2232,16 @@ async function openEditEventModal(id) {
   const ev = data.event;
 
   document.getElementById('edit-ev-id').value = ev.id;
+  document.getElementById('edit-ev-series-id').value = ev.series_id || '';
+  document.getElementById('edit-ev-apply-to-box').classList.toggle('d-none', !ev.series_id);
+  document.getElementById('edit-ev-apply-this').checked = true;
   document.getElementById('edit-ev-title').value = ev.title;
   document.getElementById('edit-ev-desc').value = ev.description || '';
+  document.getElementById('edit-ev-type').value = ev.event_type || 'other';
   document.getElementById('edit-ev-start').value = formatDateTimeLocal(new Date(ev.start_datetime));
   document.getElementById('edit-ev-end').value = formatDateTimeLocal(new Date(ev.end_datetime));
   document.getElementById('edit-ev-new-location').value = '';
+  document.getElementById('edit-ev-join-url').value = ev.join_url || '';
 
   const locations = await fetchLocations();
   const locSel = document.getElementById('edit-ev-location');
@@ -1760,14 +2284,22 @@ document.getElementById('edit-event-form').addEventListener('submit', async func
     return;
   }
 
+  const seriesId = document.getElementById('edit-ev-series-id').value;
+  const applyTo = seriesId
+    ? (document.querySelector('input[name="edit-ev-apply-to"]:checked')?.value || 'this')
+    : 'this';
+
   const { ok, data } = await apiFetch(`/api/events/${id}`, {
     method: 'PUT',
     body: JSON.stringify({
       title:          document.getElementById('edit-ev-title').value.trim(),
       description:    document.getElementById('edit-ev-desc').value.trim(),
+      event_type:     document.getElementById('edit-ev-type').value,
       location_id,
+      join_url:       document.getElementById('edit-ev-join-url').value.trim(),
       start_datetime: edit_start,
       end_datetime:   edit_end,
+      apply_to:       applyTo,
     }),
   });
 
@@ -1787,7 +2319,22 @@ document.querySelectorAll('#admin-subnav [data-admin-section]').forEach(btn => {
     btn.classList.add('active');
     document.querySelectorAll('.admin-section').forEach(sec => sec.classList.add('d-none'));
     document.getElementById(`admin-section-${btn.dataset.adminSection}`).classList.remove('d-none');
-    if (btn.dataset.adminSection === 'roadmap') renderAdminRoadmap();
+    if (btn.dataset.adminSection === 'roadmap') { renderAdminRoadmap(); loadAdminFeedback(); }
+    if (btn.dataset.adminSection === 'utilities') loadAdminSettings();
+  });
+});
+
+// Second-level tabs within Events/Entities/Locations (Create/Import/Export) -- same show/hide
+// pattern as the top-level admin-subnav, just scoped to whichever section owns the clicked pill.
+document.querySelectorAll('[data-subnav-scope]').forEach(nav => {
+  const scope = nav.dataset.subnavScope;
+  nav.querySelectorAll('[data-sub-section]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      nav.querySelectorAll('[data-sub-section]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll(`.admin-subsection[data-scope="${scope}"]`).forEach(sec => sec.classList.add('d-none'));
+      document.getElementById(`admin-sub-${btn.dataset.subSection}`).classList.remove('d-none');
+    });
   });
 });
 
@@ -1800,7 +2347,7 @@ const ROADMAP_PHASES = [
     blurb: 'Turn the single-page admin dashboard into a real multi-section tool.',
     items: [
       { title: 'Admin menu (multi-section panel)', status: 'shipped',
-        desc: 'Splits the dashboard into a Dashboard section (create/manage entities & events) and this Roadmap section, navigable via the pills above instead of one long scroll.' },
+        desc: 'Splits the dashboard into a Dashboard section (create/manage entities & events) and this Roadmap section, navigable via the pills above instead of one long scroll. Later split further into top-level tabs (Events/Entities/Locations/Utilities/Roadmap) with Create/Import/Export sub-tabs, once Dashboard itself grew into its own long scroll of eight stacked cards.' },
       { title: 'In-app phased roadmap view', status: 'shipped',
         desc: 'This page — mirrors ROADMAP.md so anyone with admin access can see what’s planned without reading the repo.' },
       { title: 'Edit entities & events in place', status: 'shipped',
@@ -1811,43 +2358,43 @@ const ROADMAP_PHASES = [
   },
   {
     title: 'Phase 2 — Event Discovery Quick Wins',
-    status: 'planned',
+    status: 'shipped',
     blurb: 'Small, mostly self-contained features inspired by events.brown.edu (LiveWhale Calendar) that make individual events easier to find, share, and get onto someone’s own calendar.',
     items: [
-      { title: 'Shareable event detail pages', status: 'planned',
+      { title: 'Shareable event detail pages', status: 'shipped',
         desc: 'A real URL per event (e.g. /event/:id) instead of only a modal inside the SPA, so a link can be texted or posted and opens straight to that event.' },
-      { title: 'Add to Calendar (.ics)', status: 'planned',
+      { title: 'Add to Calendar (.ics)', status: 'shipped',
         desc: 'One-click download of a standard .ics file for a single event — a small endpoint that formats one event as iCalendar. Self-contained.' },
-      { title: 'Share links', status: 'planned',
+      { title: 'Share links', status: 'shipped',
         desc: 'Copy-link / native share button on the event detail page. Depends on shareable event pages existing first.' },
-      { title: 'Event search', status: 'planned',
-        desc: 'Free-text search across all events (title/description/entity), not just the existing entity-name filter on the Entities page.' },
-      { title: 'Skip-navigation link', status: 'planned',
+      { title: 'Event search', status: 'shipped',
+        desc: 'Free-text search across all events (title/description/entity), not just the existing entity-name filter on the Entities page. Searches from a month ago through all upcoming events, not just forward from right now.' },
+      { title: 'Skip-navigation link', status: 'shipped',
         desc: 'A hidden-until-focused "Skip to content" link at the top of the page for keyboard/screen-reader users — standard accessibility practice, and something LiveWhale Calendar includes.' },
     ],
   },
   {
     title: 'Phase 3 — Calendar Navigation & Filtering',
-    status: 'planned',
+    status: 'shipped',
     items: [
-      { title: 'Mini-calendar heat map', status: 'planned',
-        desc: 'A small month-at-a-glance widget shading days by how many events they have, for quickly spotting busy days.' },
-      { title: 'Jump-to-Day', status: 'planned',
-        desc: 'A date picker that jumps the week/day view straight to a chosen date instead of paging one day/week at a time.' },
-      { title: 'Tags / categories', status: 'planned',
-        desc: 'Free-form or curated tags on events (e.g. "Fundraiser", "Athletics") independent of entity type, with a tag filter alongside the existing type filter.' },
-      { title: 'Subscribable filtered feed (RSS/iCal)', status: 'planned',
-        desc: 'A live-updating feed URL reflecting the same filters as the Entities page (e.g. "just Chess Club"), so a calendar app stays in sync automatically instead of a one-time .ics download.' },
+      { title: 'Mini-calendar heat map / Jump-to-Day', status: 'shipped',
+        desc: 'Shipped combined: one "Jump to a Date" toolbar button opens a compact month-grid modal, days shaded by event density relative to the busiest day in view. Clicking a day jumps the main calendar there in Day view.' },
+      { title: 'Tags / categories', status: 'shipped',
+        desc: 'Shipped in a simpler form: a single event_type per event (Meeting/Social/Academic/Athletic/Fundraiser/Performance/Other), filterable via the API and used in the PDF export (available to everyone, not just admins). Full free-form/multi-tag support is still a possible future upgrade if the fixed list ever proves too narrow.' },
+      { title: 'Calendar filtering', status: 'shipped',
+        desc: 'A filter button on the calendar toolbar narrows visible events by type, entity, location, and format (virtual/hybrid/in-person). Applies across week/day/month and persists through navigation; clears itself on leaving the calendar page or after 20 minutes idle, with a count badge on the toolbar button so a left-on filter doesn’t quietly make events look "missing."' },
+      { title: 'Subscribable filtered feed (RSS/iCal)', status: 'shipped',
+        desc: 'GET /api/feed.ics returns every upcoming event matching the same entity/type/location/format filters as one live VCALENDAR. The Filter modal’s "Copy Subscribe Link" button builds the URL from whatever’s currently selected, ready to paste into Google/Apple/Outlook’s "subscribe by URL."' },
     ],
   },
   {
     title: 'Phase 4 — Richer Event Types',
-    status: 'planned',
+    status: 'shipped',
     items: [
-      { title: 'Recurring events', status: 'planned',
-        desc: 'Weekly/monthly event series with an edit-this-vs-edit-series distinction. The biggest schema/UX change on this list — needs a recurrence-rule column and instance-expansion logic.' },
-      { title: 'Virtual / hybrid events', status: 'planned',
-        desc: 'An optional join-link field and a "Virtual"/"Hybrid" badge and filter, for events not tied to a physical campus location.' },
+      { title: 'Recurring events', status: 'shipped',
+        desc: 'Weekly/monthly series (arbitrary interval, required end date, capped at 52 occurrences) with a "this event only" vs "this and following events" choice on edit and delete. Materialized as real rows sharing a series_id rather than expanded on the fly, so search/the feed/PDF export needed zero changes to already work with them.' },
+      { title: 'Virtual / hybrid events', status: 'shipped',
+        desc: 'An optional join-link field; Virtual/Hybrid is derived from that link plus whether a location is also set, not its own stored field. Calendar tiles show a small icon, the event modal gets a "Join Online" button, and the calendar filter (and feed) gained a matching format option.' },
     ],
   },
   {
@@ -1872,6 +2419,12 @@ const ROADMAP_PHASES = [
         desc: '/display.html’s day count is currently a URL parameter (?days=N) set once at TV setup — deliberately simple. Would become a real admin-panel setting if that stops being a one-time thing (e.g. multiple screens needing different settings).' },
       { title: 'Per-person entity logins / audit trail', status: 'planned',
         desc: 'Entities currently share one password per organization, which suits how they’re used today. Would need named per-person logins if tracking who specifically posted each event ever becomes important — a bigger change.' },
+      { title: 'Self-service admin password reset', status: 'shipped',
+        desc: 'Previously, a forgotten admin password could only be recovered by deleting the admin row directly in D1 (needing Cloudflare/wrangler access, not just the app) -- a real continuity risk for a single shared institutional account. A "Forgot password?" link on the admin login page now emails a one-time reset link (30-minute expiry, single-use, token stored only as a SHA-256 hash) to the recovery address in Admin → Utilities → Notifications. Only actually solves succession if that address is institutional (a shared inbox, an IT alias) rather than any one person’s.' },
+      { title: 'Usage analytics dashboard', status: 'planned',
+        desc: 'Turn the admin Dashboard tab into an actual dashboard: event count, entities that have posted at least one event, PDF export count, and app views by device (mobile vs desktop). Needs a new aggregate-only events-log table (no IP/identifying data) plus a beacon call and a summary API endpoint. Open question: simple stat tiles vs real trend charts (the latter needs an SRI-pinned charting library, same treatment as jsPDF).' },
+      { title: 'Feedback / bug report tool', status: 'shipped',
+        desc: 'A floating Feedback button on every page opens a modal (bug/suggestion/other + message + optional reply-to email) — no login required. Reviewed under Admin → Roadmap → Suggestions & Feedback; deleting an item is the "handled" action. Emails the address set in Admin → Utilities → Notifications via Resend, if one is configured — a missing API key or failed send never blocks the submission, it just skips the email.' },
     ],
   },
 ];
@@ -1883,7 +2436,7 @@ const ROADMAP_STATUS_BADGE = {
 };
 
 function renderAdminRoadmap() {
-  const el = document.getElementById('admin-section-roadmap');
+  const el = document.getElementById('admin-roadmap-phases');
   if (!el || el.dataset.rendered) return;
   el.dataset.rendered = '1';
 
@@ -1915,14 +2468,114 @@ function renderAdminRoadmap() {
   `;
 }
 
+const FEEDBACK_CATEGORY_LABELS = { bug: 'Bug', suggestion: 'Suggestion', other: 'Other' };
+const FEEDBACK_CATEGORY_BADGE = {
+  bug: '<span class="badge bg-danger">Bug</span>',
+  suggestion: '<span class="badge bg-primary">Suggestion</span>',
+  other: '<span class="badge bg-secondary">Other</span>',
+};
+
+async function loadAdminFeedback() {
+  const el = document.getElementById('admin-feedback-list');
+  const { ok, data } = await apiFetch('/api/feedback');
+  const items = ok ? (data.feedback || []) : [];
+
+  if (!items.length) {
+    el.innerHTML = '<p class="text-muted small mb-0">No feedback submitted yet.</p>';
+    return;
+  }
+
+  el.innerHTML = items.map(f => `
+    <div class="event-list-item align-items-start" data-feedback-id="${f.id}">
+      <div class="ev-info">
+        <div class="ev-title-txt">
+          ${FEEDBACK_CATEGORY_BADGE[f.category] || escHtml(f.category)}
+          <span class="ms-1">${escHtml(f.message)}</span>
+        </div>
+        <div class="ev-meta-txt">
+          ${new Date(f.created_at).toLocaleString()}
+          ${f.contact_email ? ` · <a href="mailto:${escHtml(f.contact_email)}">${escHtml(f.contact_email)}</a>` : ''}
+        </div>
+      </div>
+      <button class="btn btn-sm btn-outline-danger" data-delete-feedback="${f.id}" title="Delete (mark handled)">
+        <i class="fa-solid fa-trash"></i>
+      </button>
+    </div>`).join('');
+
+  el.querySelectorAll('[data-delete-feedback]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const { ok } = await apiFetch(`/api/feedback/${btn.dataset.deleteFeedback}`, { method: 'DELETE' });
+      if (ok) loadAdminFeedback();
+    });
+  });
+}
+
+async function loadAdminSettings() {
+  const { ok, data } = await apiFetch('/api/admin/settings');
+  document.getElementById('admin-notify-email').value = ok ? (data.notify_email || '') : '';
+}
+
+document.getElementById('admin-settings-form').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideAlert('admin-settings-msg');
+  const btn = this.querySelector('button[type=submit]');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span>';
+
+  const { ok, data } = await apiFetch('/api/admin/settings', {
+    method: 'PUT',
+    body: JSON.stringify({ notify_email: document.getElementById('admin-notify-email').value.trim() }),
+  });
+
+  btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk me-1"></i>Save';
+
+  if (!ok) { showAlert('admin-settings-msg', data.error || 'Failed to save settings'); return; }
+  showAlert('admin-settings-msg', 'Saved!', 'success');
+});
+
+/* =============================================================
+   FEEDBACK / BUG REPORTS (public — every page, no login required)
+   ============================================================= */
+document.getElementById('btn-feedback').addEventListener('click', () => {
+  hideAlert('feedback-msg');
+  document.getElementById('feedback-form').reset();
+  new bootstrap.Modal(document.getElementById('feedbackModal')).show();
+});
+
+document.getElementById('feedback-form').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  hideAlert('feedback-msg');
+  const btn = this.querySelector('button[type=submit]');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span> Sending…';
+
+  const { ok, data } = await apiFetch('/api/feedback', {
+    method: 'POST',
+    body: JSON.stringify({
+      category: document.getElementById('feedback-category').value,
+      message: document.getElementById('feedback-message').value.trim(),
+      contact_email: document.getElementById('feedback-email').value.trim(),
+    }),
+  });
+
+  btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane me-1"></i>Send';
+
+  if (!ok) { showAlert('feedback-msg', data.error || 'Failed to send feedback'); return; }
+
+  showAlert('feedback-msg', 'Thanks! Your feedback was sent.', 'success');
+  this.reset();
+  setTimeout(() => bootstrap.Modal.getInstance(document.getElementById('feedbackModal'))?.hide(), 1200);
+});
+
 /* =============================================================
    EVENT SEARCH
    ============================================================= */
+// Searches from a month ago through all upcoming events (no upper bound) -- not just "upcoming",
+// so a search still finds something recently past (e.g. an event from last week someone's
+// looking to reference), without unbounded-past results piling up for a common search term.
 document.getElementById('btn-event-search').addEventListener('click', () => {
   const input = document.getElementById('event-search-input');
   input.value = '';
   document.getElementById('event-search-results').innerHTML =
-    '<p class="text-muted small">Start typing to search upcoming events.</p>';
+    '<p class="text-muted small">Start typing to search events from the past month onward.</p>';
   new bootstrap.Modal(document.getElementById('eventSearchModal')).show();
   setTimeout(() => input.focus(), 200);
 });
@@ -1930,15 +2583,16 @@ document.getElementById('btn-event-search').addEventListener('click', () => {
 async function runEventSearch(q) {
   const resultsEl = document.getElementById('event-search-results');
   if (!q.trim()) {
-    resultsEl.innerHTML = '<p class="text-muted small">Start typing to search upcoming events.</p>';
+    resultsEl.innerHTML = '<p class="text-muted small">Start typing to search events from the past month onward.</p>';
     return;
   }
 
-  const { ok, data } = await apiFetch(`/api/events?start=${isoLocal(new Date())}&q=${encodeURIComponent(q.trim())}`);
+  const searchStart = isoLocal(addMonths(new Date(), -1));
+  const { ok, data } = await apiFetch(`/api/events?start=${searchStart}&q=${encodeURIComponent(q.trim())}`);
   const results = ok ? (data.events || []) : [];
 
   if (!results.length) {
-    resultsEl.innerHTML = '<p class="text-muted small">No upcoming events match your search.</p>';
+    resultsEl.innerHTML = '<p class="text-muted small">No events from the past month or upcoming match your search.</p>';
     return;
   }
 
@@ -1968,6 +2622,130 @@ document.getElementById('event-search-input').addEventListener('input', debounce
 }, 300));
 
 /* =============================================================
+   CALENDAR FILTERS (event type / entity / location)
+   ============================================================= */
+// A left-on filter silently hides events, which reads as "where did everything go" to whoever
+// hits this next -- rather than trusting people to remember to clear it, it clears itself after
+// a while unattended, and immediately on leaving the calendar page (the "switch screens" case is
+// the more common way to forget, so it isn't just a fallback for the timer).
+const CAL_FILTER_TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes
+
+function updateCalFilterIndicator() {
+  const btn = document.getElementById('btn-cal-filter');
+  const badge = document.getElementById('cal-filter-badge');
+  const count = activeCalFilterCount();
+  btn.classList.toggle('active', count > 0);
+  badge.classList.toggle('d-none', count === 0);
+  badge.textContent = String(count);
+  btn.title = count > 0 ? `Filter events (${count} active)` : 'Filter events';
+}
+
+function armCalFilterTimeout() {
+  clearTimeout(state.calFilterTimeoutId);
+  state.calFilterTimeoutId = setTimeout(() => {
+    state.calFilters = { event_type: '', entity_id: '', location_id: '', format: '' };
+    updateCalFilterIndicator();
+    if (state.currentPage === 'home') renderCalendar();
+  }, CAL_FILTER_TIMEOUT_MS);
+}
+
+function disarmCalFilterTimeout() {
+  clearTimeout(state.calFilterTimeoutId);
+  state.calFilterTimeoutId = null;
+}
+
+async function populateCalFilterOptions() {
+  const entitySel = document.getElementById('cal-filter-entity');
+  const locationSel = document.getElementById('cal-filter-location');
+
+  const [entities, locations] = await Promise.all([
+    apiFetch('/api/entities').then(({ ok, data }) => (ok ? data.entities || [] : [])),
+    fetchLocations(),
+  ]);
+
+  const ENTITY_TYPE_ORDER = ['club', 'department', 'office', 'organization', 'program'];
+  const groupedEntities = ENTITY_TYPE_ORDER
+    .map(type => ({ type, label: TYPE_LABELS[type] || type, items: entities.filter(en => en.type === type) }))
+    .filter(g => g.items.length);
+  const knownTypes = new Set(ENTITY_TYPE_ORDER);
+  const otherEntities = entities.filter(en => !knownTypes.has(en.type));
+  if (otherEntities.length) groupedEntities.push({ type: 'other', label: 'Other', items: otherEntities });
+
+  entitySel.innerHTML = `<option value="">All entities</option>` +
+    groupedEntities.map(g => `<optgroup label="${escHtml(g.label)}s">` +
+      g.items.map(en => `<option value="${en.id}">${escHtml(en.name)}</option>`).join('') +
+      `</optgroup>`
+    ).join('');
+
+  locationSel.innerHTML = `<option value="">All locations</option>` +
+    locations.map(l => `<option value="${l.id}">${escHtml(l.name)}</option>`).join('');
+
+  document.getElementById('cal-filter-type').value = state.calFilters.event_type;
+  entitySel.value = state.calFilters.entity_id;
+  locationSel.value = state.calFilters.location_id;
+  document.getElementById('cal-filter-format').value = state.calFilters.format;
+}
+
+document.getElementById('btn-cal-filter').addEventListener('click', async () => {
+  new bootstrap.Modal(document.getElementById('calFilterModal')).show();
+  await populateCalFilterOptions();
+});
+
+document.getElementById('cal-filter-form').addEventListener('submit', function (e) {
+  e.preventDefault();
+  state.calFilters = {
+    event_type:  document.getElementById('cal-filter-type').value,
+    entity_id:   document.getElementById('cal-filter-entity').value,
+    location_id: document.getElementById('cal-filter-location').value,
+    format:      document.getElementById('cal-filter-format').value,
+  };
+  updateCalFilterIndicator();
+  if (calFiltersActive()) armCalFilterTimeout(); else disarmCalFilterTimeout();
+  bootstrap.Modal.getInstance(document.getElementById('calFilterModal'))?.hide();
+  if (state.currentPage === 'home') renderCalendar();
+});
+
+document.getElementById('cal-filter-clear').addEventListener('click', () => {
+  state.calFilters = { event_type: '', entity_id: '', location_id: '', format: '' };
+  document.getElementById('cal-filter-form').reset();
+  updateCalFilterIndicator();
+  disarmCalFilterTimeout();
+  bootstrap.Modal.getInstance(document.getElementById('calFilterModal'))?.hide();
+  if (state.currentPage === 'home') renderCalendar();
+});
+
+// Builds the subscribable feed URL from whatever's currently selected in the filter form --
+// doesn't require hitting Apply first, so picking filters and grabbing a link works as its own
+// standalone action.
+document.getElementById('btn-copy-feed-link').addEventListener('click', async () => {
+  hideAlert('cal-feed-msg');
+  const params = new URLSearchParams();
+  const eventType = document.getElementById('cal-filter-type').value;
+  const entityId = document.getElementById('cal-filter-entity').value;
+  const locationId = document.getElementById('cal-filter-location').value;
+  const format = document.getElementById('cal-filter-format').value;
+  if (eventType) params.set('event_type', eventType);
+  if (entityId) params.set('entity_id', entityId);
+  if (locationId) params.set('location_id', locationId);
+  if (format) params.set('format', format);
+  const qs = params.toString();
+  const url = `${location.origin}/api/feed.ics${qs ? '?' + qs : ''}`;
+
+  try {
+    await navigator.clipboard.writeText(url);
+  } catch (e) {
+    const tmp = document.createElement('input');
+    tmp.value = url;
+    document.body.appendChild(tmp);
+    tmp.select();
+    document.execCommand('copy');
+    document.body.removeChild(tmp);
+  }
+  showAlert('cal-feed-msg', 'Subscribe link copied to clipboard', 'success');
+  setTimeout(() => hideAlert('cal-feed-msg'), 2000);
+});
+
+/* =============================================================
    INIT
    ============================================================= */
 navigate('home');
@@ -1977,4 +2755,16 @@ navigate('home');
 (function handleInitialEventDeepLink() {
   const m = location.pathname.match(/^\/event\/(\d+)$/);
   if (m) openEventModalById(m[1], { pushState: false });
+})();
+
+// Support the emailed admin password-reset link (/?reset_token=...): jump to the Admin page and
+// open the "Set New Password" modal pre-filled with the token, then strip it from the visible
+// URL so it doesn't linger in the address bar or browser history after use.
+(function handleAdminResetTokenLink() {
+  const token = new URLSearchParams(location.search).get('reset_token');
+  if (!token) return;
+  document.getElementById('reset-admin-token').value = token;
+  navigate('admin');
+  new bootstrap.Modal(document.getElementById('resetAdminPasswordModal')).show();
+  history.replaceState({}, '', location.pathname);
 })();

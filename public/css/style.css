@@ -281,6 +281,7 @@ body {
   color: var(--coi-blue);
 }
 .cal-nav-btn {
+  position: relative;
   padding: 5px 14px;
   border-radius: 6px;
   border: 1px solid var(--color-border-2);
@@ -295,6 +296,24 @@ body {
   background: var(--coi-blue);
   color: var(--color-surface);
   border-color: var(--coi-blue);
+}
+/* Filter button: the .active fill above already flags "on" clearly, same as Week/Day/Month --
+   the badge adds *how many* filters, so it reads as more than a vague presence indicator. */
+.filter-badge {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--coi-gold);
+  color: var(--coi-blue);
+  font-size: .68rem;
+  font-weight: 700;
+  line-height: 17px;
+  text-align: center;
+  border: 1px solid var(--color-surface);
 }
 .view-toggle { display: flex; gap: 4px; }
 
@@ -520,6 +539,43 @@ body {
 .month-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 .month-dot-more { font-size: .62rem; color: var(--color-muted); font-weight: 600; }
 
+/* Jump to Date / mini-calendar heat map -- much more compact than the full month-grid above,
+   shaded by event density instead of showing dots per event. */
+.mini-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+}
+.mini-cal-dow {
+  text-align: center;
+  font-size: .62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  letter-spacing: .03em;
+  padding-bottom: 2px;
+}
+.mini-cal-cell {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--color-strong);
+  cursor: pointer;
+  background: var(--color-border-3);
+  transition: filter .1s;
+}
+.mini-cal-cell:hover { filter: brightness(0.94); }
+.mini-cal-cell.dim { color: var(--color-muted); opacity: .5; }
+.mini-cal-cell.today { box-shadow: 0 0 0 2px var(--coi-blue) inset; }
+.mini-cal-cell.heat-1 { background: #ded1e6; }
+.mini-cal-cell.heat-2 { background: #c1a6d1; }
+.mini-cal-cell.heat-3 { background: #9b74b3; color: #fff; }
+.mini-cal-cell.heat-4 { background: var(--coi-blue); color: #fff; }
+
 @media (max-width: 575px) {
   .month-cell { min-height: 56px; padding: 4px; }
   .day-strip-pill { width: 40px; }
@@ -558,6 +614,7 @@ body {
 }
 .cal-event:hover { filter: brightness(1.08); transform: scale(1.01); }
 .cal-event .ev-title { font-weight: 600; }
+.ev-format-icon { font-size: .7em; opacity: .9; }
 .cal-event .ev-entity { opacity: .85; font-size: .66rem; }
 .cal-event .ev-location { opacity: .9; font-size: .68rem; margin-top: 2px; }
 /* Only actually visible when the block is tall enough -- .cal-event's overflow:hidden clips it
@@ -790,7 +847,7 @@ body {
   padding: 22px;
   margin-bottom: 20px;
 }
-#admin-actions{
+.admin-subsection {
   margin-left: 0px;
   margin-right: 0px;
 }
@@ -812,6 +869,26 @@ body {
 .admin-subnav .nav-link.active {
   background: var(--coi-blue);
   color: var(--color-surface);
+}
+
+.admin-subnav2 {
+  margin-bottom: 16px;
+  gap: 6px;
+}
+.admin-subnav2 .nav-link {
+  color: var(--color-muted-2);
+  font-weight: 600;
+  font-size: .82rem;
+  border-radius: 8px;
+  padding: 6px 14px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+}
+.admin-subnav2 .nav-link:hover { background: var(--color-border); }
+.admin-subnav2 .nav-link.active {
+  background: var(--coi-gold);
+  color: var(--coi-blue);
+  border-color: var(--coi-gold);
 }
 
 .roadmap-phase-header {
@@ -1004,4 +1081,32 @@ body {
   .entities-filter input { width: 100%; }
   /* Hide calendar title only on small phones */
   #cal-title { display: none !important; }
+}
+
+/* ---- Feedback button (floating, every page) ---- */
+.feedback-fab {
+  position: fixed;
+  right: 20px;
+  bottom: 24px;
+  z-index: 400; /* above page content and #bottom-nav (200), below modals (Bootstrap's ~1050) */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  border: none;
+  background: var(--coi-blue);
+  color: var(--color-surface);
+  font-weight: 600;
+  font-size: .85rem;
+  box-shadow: 0 4px 14px rgba(0,0,0,.2);
+  cursor: pointer;
+  transition: filter .15s, transform .15s;
+}
+.feedback-fab:hover { filter: brightness(1.12); transform: translateY(-1px); }
+.feedback-fab i { font-size: 1.05rem; }
+
+@media (max-width: 991px) {
+  /* Clear #bottom-nav so the FAB doesn't sit on top of it */
+  .feedback-fab { bottom: 76px; }
 }

@@ -110,11 +110,18 @@ You can pre-populate the `locations` table via the D1 console or by using the `/
 ```bash
 wrangler pages secret put JWT_SECRET
 wrangler pages secret put ADMIN_PASSWORD
+wrangler pages secret put RESEND_API_KEY
 ```
-This sets them for **Production only**. Preview deployments (PRs/branches) are a separate
-Cloudflare Pages environment with a separate secret store — set the same two secrets for Preview
-too, in the dashboard under Pages project → Settings → Environment variables → Preview tab, or
-every preview deployment's login will fail with "Server misconfigured: JWT_SECRET is not set".
+`RESEND_API_KEY` is optional — it powers the notification email for the feedback tool (Admin →
+Utilities → Notifications sets the destination address). Without it, feedback submissions still
+save normally; the app just can't email anyone about them. Get a key at
+[resend.com](https://resend.com) (free tier is plenty for this).
+
+This sets all three for **Production only**. Preview deployments (PRs/branches) are a separate
+Cloudflare Pages environment with a separate secret store — set them for Preview too, in the
+dashboard under Pages project → Settings → Environment variables → Preview tab, or every preview
+deployment's login will fail with "Server misconfigured: JWT_SECRET is not set" (`RESEND_API_KEY`
+being missing there just means preview feedback submissions won't send an email, same as prod).
 
 ### 4. Deploy
 ```bash
@@ -125,6 +132,12 @@ wrangler pages deploy public
 ### 5. First login
 Navigate to **/admin** and log in with the `ADMIN_PASSWORD` value you set above.
 The admin account is bootstrapped automatically on first login.
+
+Once logged in, set a recovery email under **Admin → Utilities → Notifications** — this powers
+both the feedback-tool notifications and a "Forgot password?" self-service reset link on the
+admin login page. For institutional continuity (e.g. staff turnover), point it at a shared
+department inbox or IT alias rather than one person's individual email — see `SECURITY.md`'s
+"Recommendations for IT" for why that distinction matters.
 
 ### 6. (Optional) Bulk-import entities
 The **Bulk Import Entities** card on the Admin Dashboard is the easiest way to do this: paste one
@@ -149,10 +162,12 @@ Create a `.dev.vars` file (git-ignored) in the project root with:
 ```
 JWT_SECRET=dev-secret-change-in-production
 ADMIN_PASSWORD=CollegeOfIdaho2024!
+RESEND_API_KEY=re_...
 ```
 `JWT_SECRET` and `ADMIN_PASSWORD` are required — there's no built-in fallback, so login endpoints
 return a 500 without this file (or the equivalent secrets in a deployed environment). See
-[SECURITY.md](./SECURITY.md) for why.
+[SECURITY.md](./SECURITY.md) for why. `RESEND_API_KEY` is optional (see step 3 above) — omit it
+locally and feedback-form testing still works, just without a real email going out.
 
 ```bash
 wrangler pages dev public --d1=DB
